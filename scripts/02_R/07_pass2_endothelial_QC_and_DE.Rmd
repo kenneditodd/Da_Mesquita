@@ -1,0 +1,909 @@
+---
+title: "Mouse Meningeal Dura scRNAseq"
+subtitle: "Pass 2 Endothelial QC and DE"
+author: "Kennedi Todd"
+date: "04/21/2023"
+output:
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_float: true
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Setup
+## Working directory
+```{r working_directory}
+knitr::opts_knit$set(root.dir = ".")
+```
+
+## Libraries
+```{r libraries, message=FALSE, warning=FALSE}
+# load packages
+library(ComplexUpset) 
+library(dplyr)        # ungroup()
+library(ggplot2)
+library(ggrepel)      # geom_text_repel()
+library(ggtree)       # BuildClusterTree()
+library(gridExtra)    # grid.arrange()
+library(gtools)       # smartbind()
+library(monocle3)
+library(parallel)     # detectCores()
+library(plotly)       # plot_ly()
+library(Seurat)       # Idents()
+library(SeuratWrappers)
+library(tidyr)        # %>%
+library(UpSetR)       # fromList()
+
+# work in parallel
+options(mc.cores = detectCores() - 1)
+```
+
+## Variables and functions
+```{r set_variables_and_functions}
+# variables
+sample_order <- c("E3.M","E3.F","E4.M","E4.F")
+sample_colors <- c("#26946A","#1814A1","#EAC941","#DF5F00")
+sample_order2 <- c("Male E3", "Male E4", "Female E3", "Female E4")
+isoform_order <- c("E4","E3")
+isoform_colors <- c("darkgray","cornflowerblue")
+sex_order <- c("Male","Female")
+sex_colors <- c("darkgray","purple")
+
+# single cell functions
+source("../../refs/Kennedi_single_cell_functions.R")
+```
+
+## Load data
+```{r read_pass2_endothelial_annotated}
+# load
+endothelial <- readRDS("../../rObjects/pass2_endothelial_recluster_annotated.rds")
+
+# reset levels
+endothelial$sample <- factor(endothelial$sample,levels = sample_order)
+endothelial$sample2 <- factor(endothelial$sample2,levels = sample_order2)
+endothelial$sex <- factor(endothelial$sex,levels = sex_order)
+endothelial$isoform <- factor(endothelial$isoform,levels = isoform_order)
+```
+
+# Plots and QC
+## 2D UMAP
+```{r downsampled_umap}
+cluster_colors <- c("gray","firebrick1","gold","chartreuse3","cyan","blue",
+                    "magenta")
+
+u1 <- DimPlot(object = endothelial,
+              reduction = "umap",
+              shuffle = TRUE,
+              raster = FALSE,
+              group.by = "annotated_clusters",
+              cols = cluster_colors)
+u1
+```
+
+## 3D UMAP
+```{r}
+embeddings <- endothelial@reductions$umap@cell.embeddings
+embeddings <- cbind(embeddings, as.character(endothelial$annotated_clusters))
+colnames(embeddings)[4] <- "annotated_clusters"
+embeddings <- as.data.frame(embeddings)
+
+three.dim <- plot_ly(embeddings,
+                     x = ~UMAP_1, 
+                     y = ~UMAP_2, 
+                     z = ~UMAP_3, 
+                     color = ~annotated_clusters, 
+                     colors = cluster_colors,
+                     size = 1) 
+three.dim <- three.dim %>% add_markers() 
+three.dim <- three.dim %>% layout(scene = list(xaxis = list(title = 'UMAP_1'), 
+                                     yaxis = list(title = 'UMAP_2'), 
+                                     zaxis = list(title = 'UMAP_3')))
+three.dim
+```
+
+## Markers
+```{r}
+Idents(endothelial) <- "annotated_clusters"
+goi1 <- c("Pecam1","Vwf","Cfh","Kdr","Ifitm3","Cldn5","H2-Eb1","Vegfc","Prox1",
+         "Flt4","Ccl21a","Mrc1","Ptprc","Lyz2")
+
+v1 <- VlnPlot(endothelial,
+              features = goi1,
+              cols = cluster_colors,
+              split.by = "annotated_clusters",
+              flip = TRUE,
+              stack = TRUE) +
+  theme(axis.text.x = element_text(angle = 90,vjust = 0.5, hjust=1))
+v1
+```
+
+## Dim Plots
+```{r umap_annotated}
+# Apoe isoform
+umap1 <- DimPlot(object = endothelial, 
+                 group.by = "annotated_clusters",
+                 reduction = "umap",
+                 split.by = "isoform",
+                 repel = TRUE,
+                 cols = cluster_colors)
+umap1
+
+# sex
+umap2 <- DimPlot(object = endothelial, 
+                 group.by = "annotated_clusters",
+                 reduction = "umap",
+                 split.by = "sex",
+                 repel = TRUE,
+                 cols = cluster_colors)
+umap2
+
+# sample
+umap3 <- DimPlot(object = endothelial, 
+                 group.by = "annotated_clusters",
+                 reduction = "umap",
+                 split.by = "sample2",
+                 ncol = 2,
+                 repel = TRUE,
+                 cols = cluster_colors)
+umap3
+
+# phase
+umap4 <- DimPlot(object = endothelial, 
+                 group.by = "annotated_clusters",
+                 reduction = "umap",
+                 split.by = "phase",
+                 cols = cluster_colors,
+                 repel = TRUE)
+umap4
+
+# mito.factor
+umap5 <- DimPlot(object = endothelial, 
+                 group.by = "annotated_clusters",
+                 reduction = "umap",
+                 split.by = "mito.factor",
+                 cols = cluster_colors,
+                 ncol = 2,
+                 repel = TRUE)
+umap5
+```
+
+```{r, echo=FALSE, eval=FALSE}
+umap1
+path <- "../../results/pass_2/endothelial/clustering_QC/"
+pdf(paste0(path, "split_isoform_umap.pdf"), width = 12, height = 6)
+dev.off()
+
+umap2
+pdf(paste0(path, "split_sex_umap.pdf"), width = 12, height = 6)
+dev.off()
+
+umap3
+pdf(paste0(path, "split_sample_umap.pdf"), width = 12, height = 8)
+dev.off()
+
+umap4
+pdf(paste0(path, "split_cell_cycle_phase_umap.pdf"), width = 12, height = 6)
+dev.off()
+
+umap5
+pdf(paste0(path, "split_mito_factor_umap.pdf"), width = 12, height = 8)
+dev.off()
+
+remove(umap1,umap2,umap3,umap4,umap5)
+```
+
+## Feature plots
+```{r feature_plots_annotated, warning=FALSE, message=FALSE}
+# UMAP percent.mt
+f1 <- FeaturePlot(endothelial, 
+            reduction = "umap", 
+            features = "percent.mt")  + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f1
+
+# UMAP nCount
+f2 <- FeaturePlot(endothelial, 
+            reduction = "umap",
+            features = "nCount_RNA") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f2
+
+# UMAP nFeature
+f3 <- FeaturePlot(endothelial, 
+            reduction = "umap", 
+            features = "nFeature_RNA") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f3
+
+# UMAP percent.ribo
+f4 <- FeaturePlot(endothelial, 
+            reduction = "umap", 
+            features = "percent.ribo.protein") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f4
+
+# UMAP percent.ribo
+f5 <- FeaturePlot(endothelial, 
+            reduction = "umap", 
+            features = "cell.complexity") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f5
+```
+
+```{r, echo=FALSE, eval=FALSE}
+path <- "../../results/pass_2/endothelial/clustering_QC/heatmap_"
+f1
+pdf(paste0(path, "percent_mito.pdf"), width = 8, height = 6)
+dev.off()
+
+f2
+pdf(paste0(path, "nCount.pdf"), width = 8, height = 6)
+dev.off()
+
+f3
+pdf(paste0(path, "nFeature.pdf"), width = 8, height = 6)
+dev.off()
+
+f4
+pdf(paste0(path, "percent_ribo.pdf"), width = 8, height = 6)
+dev.off()
+
+f5
+pdf(paste0(path, "cell_complexity.pdf"), width = 8, height = 6)
+dev.off()
+
+remove(f1,f2,f3,f4,f5)
+```
+
+## Ttr
+```{r}
+VlnPlot(endothelial,
+        features = "Ttr",
+        split.by = "sample",
+        group.by = "sample",
+        cols = sample_colors)
+VlnPlot(endothelial,
+        features = "Ttr",
+        split.by = "annotated_clusters",
+        cols = cluster_colors)
+FeaturePlot(object = endothelial, 
+            features = "Ttr")
+```
+
+
+## Percent cells per cluster
+```{r percent_cells}
+# isoform
+b1 <- endothelial@meta.data %>%
+  group_by(annotated_clusters, isoform) %>%
+  dplyr::count() %>%
+  group_by(annotated_clusters) %>%
+  dplyr::mutate(percent = 100*n/sum(n)) %>%
+  ungroup() %>%
+  ggplot(aes(x=annotated_clusters,y=percent, fill=isoform)) +
+  theme_classic() +
+  geom_col() +
+  scale_fill_manual(values = isoform_colors) +
+  ggtitle("Percentage of isoform per cluster") +
+  theme(axis.text.x = element_text(angle = 90,vjust = 0.5, hjust=1))
+b1
+
+# sex
+b2 <- endothelial@meta.data %>%
+  group_by(annotated_clusters, sex) %>%
+  dplyr::count() %>%
+  group_by(annotated_clusters) %>%
+  dplyr::mutate(percent = 100*n/sum(n)) %>%
+  ungroup() %>%
+  ggplot(aes(x=annotated_clusters,y=percent, fill=sex)) +
+  theme_classic() +
+  geom_col() +
+  scale_fill_manual(values = sex_colors) +
+  ggtitle("Percentage of sex per cluster") +
+  theme(axis.text.x = element_text(angle = 90,vjust = 0.5, hjust=1))
+b2
+
+# sample
+b3 <- endothelial@meta.data %>%
+  group_by(annotated_clusters, sample2) %>%
+  dplyr::count() %>%
+  group_by(annotated_clusters) %>%
+  dplyr::mutate(percent = 100*n/sum(n)) %>%
+  ungroup() %>%
+  ggplot(aes(x=annotated_clusters,y=percent, fill=sample2)) +
+  theme_classic() +
+  geom_col() +
+  scale_fill_manual(values = sample_colors) +
+  ggtitle("Percentage of sample per cluster") +
+  theme(axis.text.x = element_text(angle = 90,vjust = 0.5, hjust=1))
+b3
+
+# phase
+b4 <- endothelial@meta.data %>%
+  group_by(annotated_clusters, phase) %>%
+  dplyr::count() %>%
+  group_by(annotated_clusters) %>%
+  dplyr::mutate(percent = 100*n/sum(n)) %>%
+  ungroup() %>%
+  ggplot(aes(x=annotated_clusters,y=percent, fill=phase)) +
+  theme_classic() +
+  geom_col() +
+  ggtitle("Percentage of phase per cluster") +
+  theme(axis.text.x = element_text(angle = 90,vjust = 0.5, hjust=1))
+b4
+
+# mito.factor
+b5 <- endothelial@meta.data %>%
+  group_by(annotated_clusters, mito.factor) %>%
+  dplyr::count() %>%
+  group_by(annotated_clusters) %>%
+  dplyr::mutate(percent = 100*n/sum(n)) %>%
+  ungroup() %>%
+  ggplot(aes(x=annotated_clusters,y=percent, fill=mito.factor)) +
+  theme_classic() +
+  geom_col() +
+  ggtitle("Percentage of mito.factor per cluster") +
+  theme(axis.text.x = element_text(angle = 90,vjust = 0.5, hjust=1))
+b5
+```
+
+```{r,echo=FALSE,eval=FALSE}
+# save
+b1
+path <- "../../results/pass_2/endothelial/clustering_QC/"
+pdf(paste0(path, "percent_isoform_per_cluster_annotated.pdf"), width = 8, height = 6)
+dev.off()
+
+# save
+b2
+pdf(paste0(path, "percent_sex_per_cluster_annotated.pdf"), width = 8, height = 6)
+dev.off()
+
+# save
+b3
+pdf(paste0(path, "percent_sample_per_cluster_annotated.pdf"), width = 8, height = 6)
+dev.off()
+
+# save
+b4
+pdf(paste0(path, "percent_phase_per_cluster_annotated.pdf"), width = 8, height = 6)
+dev.off()
+
+# save
+b5
+pdf(paste0(path, "percent_mito_factor_per_cluster_annotated.pdf"), width = 8, height = 6)
+dev.off()
+
+# cleanup
+remove(b1,b2,b3,b4,b5)
+```
+
+## Cluster tree
+```{r cluster_tree_indv_annotated, message=FALSE, warning=FALSE}
+Idents(endothelial) <- endothelial$annotated_clusters
+endothelial <- BuildClusterTree(object = endothelial,
+                                     dims = 1:15,
+                                     reorder = FALSE,
+                                     reorder.numeric = FALSE)
+
+tree <- endothelial@tools$BuildClusterTree
+tree$tip.label <- paste0(tree$tip.label)
+
+p <- ggtree::ggtree(tree, aes(x, y)) +
+  scale_y_reverse() +
+  ggtree::geom_tree() +
+  ggtree::theme_tree() +
+  ggtree::geom_tiplab(offset = 1) +
+  ggtree::geom_tippoint(color = cluster_colors[1:length(tree$tip.label)], shape = 16, size = 5) +
+  coord_cartesian(clip = 'off') +
+  theme(plot.margin = unit(c(0,2.5,0,0), 'cm'))
+p
+```
+
+```{r,echo=FALSE,eval=FALSE}
+p
+path <- paste0("../../results/pass_2/endothelial/clustering_QC/cluster_tree_annotated")
+pdf(paste0(path, ".pdf"), width = 20, height = 10)
+dev.off()
+```
+
+## Cells per sample
+```{r}
+data <- as.data.frame(table(endothelial$sample))
+colnames(data) <- c("sample","frequency")
+
+ncells <- ggplot(data, aes(x = sample, y = frequency, fill = sample)) + 
+  geom_col() +
+  theme_classic() +
+  geom_text(aes(label = frequency), 
+            position=position_dodge(width=0.9), 
+            vjust=-0.25) +
+  scale_fill_manual(values = sample_colors) + 
+  scale_y_continuous(breaks = seq(0,2000, by = 500), limits = c(0,2000)) +
+  ggtitle("Filtered: cells per sample") +
+  theme(legend.position =  "none") + 
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+ncells
+```
+
+```{r,echo=FALSE,eval=FALSE}
+ncells
+path <- "../../results/pass_2/endothelial/clustering_QC/cells_per_sample"
+pdf(paste0(path, ".pdf"), width = 6, height = 4)
+dev.off()
+```
+
+```{r}
+v1 <- VlnPlot(endothelial,
+             features = goi
+             flip = TRUE,
+             stack = TRUE,
+             cols = cluster_colors,
+             split.by = "seurat_clusters") +
+  theme(axis.text.x = element_text(angle = 90,vjust = 0.5, hjust=1))
+v1
+```
+
+
+# Differential expression
+## E4 female vs E3 female within each cluster
+```{r female_de, warning=FALSE, message=FALSE, eval=FALSE}
+# intitialize variables
+cell_types <- levels(endothelial$annotated_clusters)
+cell_types <- cell_types[1:6]
+female.df <- data.frame()
+
+# loop through clusters
+for (i in cell_types) {
+  print(i)
+  cluster <- subset(endothelial, annotated_clusters == i)
+  Idents(cluster) <- cluster$sample
+  markers <- FindMarkers(object = cluster,
+                         ident.1 = "E4.F",
+                         ident.2 = "E3.F",
+                         only.pos = FALSE, # default
+                         min.pct = 0.10,  # default
+                         test.use = "MAST",
+                         verbose = TRUE,
+                         assay = "RNA")
+  if(nrow(markers) == 0) {
+    next
+  }
+  markers$cluster <- i
+  markers$gene <- rownames(markers)
+  female.df <- rbind(female.df, markers)
+}
+
+# reformat table
+colnames(female.df)[c(3,4)] <- c("percent_E4_F","percent_E3_F")
+rownames(female.df) <- 1:nrow(female.df)
+female.df$percent_difference <- abs(female.df$percent_E4_F - female.df$percent_E3_F)
+female.df <- female.df[,c(6,7,1,5,2,3,4,8)]
+
+# write table
+write.table(female.df, "../../results/pass_2/endothelial/DEGs/E4_F_vs_E3_F_DEGs.tsv", 
+            sep = "\t", quote = FALSE, row.names = FALSE)
+```
+
+## E4 male vs E3 male within each cluster
+```{r male_de, warning=FALSE, message=FALSE, eval=FALSE}
+# initialize variable
+cell_types <- levels(endothelial$annotated_clusters)
+cell_types <- cell_types[1:6]
+male.df <- data.frame()
+
+# loop through clusters
+for (i in cell_types) {
+  print(i)
+  cluster <- subset(endothelial, annotated_clusters == i)
+  Idents(cluster) <- cluster$sample
+  markers <- FindMarkers(object = cluster,
+                         ident.1 = "E4.M",
+                         ident.2 = "E3.M",
+                         only.pos = FALSE, # default
+                         min.pct = 0.10,  # default
+                         test.use = "MAST",
+                         verbose = TRUE,
+                         assay = "RNA")
+  if(nrow(markers) == 0) {
+    next
+  }
+  markers$cluster <- i
+  markers$gene <- rownames(markers)
+  male.df <- rbind(male.df, markers)
+}
+
+# reformat table
+colnames(male.df)[c(3,4)] <- c("percent_E4_M","percent_E3_M")
+rownames(male.df) <- 1:nrow(male.df)
+male.df$percent_difference <- abs(male.df$percent_E4_M - male.df$percent_E3_M)
+male.df <- male.df[,c(6,7,1,5,2,3,4,8)]
+
+# write table
+write.table(male.df, 
+            "../../results/pass_2/endothelial/DEGs/E4_M_vs_E3_M_DEGs.tsv", 
+            sep = "\t",quote = FALSE, row.names = FALSE)
+```
+
+## Compare DEGs
+```{r compare_DEGs, eval=FALSE}
+# read tables
+female.df <- read.table(
+  "../../results/pass_2/endothelial/DEGs/E4_F_vs_E3_F_DEGs.tsv",
+  sep = "\t", header = TRUE)
+male.df <- read.table(
+  "../../results/pass_2/endothelial/DEGs/E4_M_vs_E3_M_DEGs.tsv",
+  sep = "\t", header = TRUE)
+
+# filter
+female.df <- female.df[female.df$p_val_adj < 0.05,]
+male.df <- male.df[male.df$p_val_adj < 0.05,]
+
+# add columns
+direction <- female.df$avg_log2FC > 0
+direction <- gsub(TRUE, "E4_female_up", direction)
+direction <- gsub(FALSE, "E4_female_down", direction)
+female.df$direction <- direction
+direction <- male.df$avg_log2FC > 0
+direction <- gsub(TRUE, "E4_male_up", direction)
+direction <- gsub(FALSE, "E4_male_down", direction)
+male.df$direction <- direction
+
+# reformat tables
+female.df2 <- female.df %>%
+  dplyr::count(cluster,direction) %>%
+  tidyr::spread(cluster, n)
+male.df2 <- male.df %>%
+  dplyr::count(cluster,direction) %>%
+  tidyr::spread(cluster, n)
+
+# master table
+df <- smartbind(female.df2, male.df2)
+df
+```
+
+```{r,echo=FALSE,eval=FALSE}
+# save
+write.table(
+  df, 
+  "../../results/pass_2/endothelial/DEGs/DEG_comparison_pvaladj_0.05.tsv",
+  sep = "\t", quote = FALSE, row.names = FALSE)
+```
+
+## Upset plot
+```{r upset_plots,eval=FALSE}
+# read tables
+female.df <- read.table("../../results/pass_2/endothelial/DEGs/E4_F_vs_E3_F_DEGs.tsv",
+                         sep = "\t", header = TRUE)
+male.df <- read.table("../../results/pass_2/endothelial/DEGs/E4_M_vs_E3_M_DEGs.tsv",
+                         sep = "\t", header = TRUE)
+
+# filter tables
+female.df <- female.df[female.df$p_val_adj < 0.05,]
+male.df <- male.df[male.df$p_val_adj < 0.05,]
+
+clusters <- levels(endothelial$annotated_clusters)
+clusters <- cell_types[1:13]
+for (i in clusters) {
+  # Subset df by cluster
+  female <- subset(female.df, female.df$cluster == i)
+  sex <- subset(male.df, male.df$cluster == i)
+  
+  # Subset lists
+  female_up <- subset(female$gene, female$avg_log2FC > 0)
+  female_down <- subset(female$gene, female$avg_log2FC < 0)
+  male_up <- subset(sex$gene, sex$avg_log2FC > 0)
+  male_down <- subset(sex$gene, sex$avg_log2FC < 0)
+  list_input <- list("E4 Female Up-regulated" = female_up,
+                     "E4 Male Up-regulated" = male_up,
+                     "E4 Female Down-regulated" = female_down,
+                     "E4 Male Down-regulated" = male_down)
+  data <- fromList(list_input)
+  
+  # store names
+  names <- c("E4 Male Down-regulated","E4 Female Down-regulated",
+             "E4 Male Up-regulated","E4 Female Up-regulated")
+  
+  # plot
+  upset_gene <- ComplexUpset::upset(data, 
+                      names,
+                      set_sizes=(
+                        upset_set_size()
+                        + geom_text(aes(label=..count..), hjust=1.1, stat='count')
+                        + expand_limits(y=75)),
+                      queries = list(upset_query("E4 Female Up-regulated", fill = "red"),
+                                     upset_query("E4 Male Up-regulated", fill = "red"),
+                                     upset_query("E4 Female Down-regulated", fill = "blue"),
+                                     upset_query("E4 Male Down-regulated", fill = "blue")),
+                      base_annotations = list('Intersection size' = (
+                        intersection_size(bar_number_threshold=1, width=0.5)
+                        + scale_y_continuous(expand=expansion(mult=c(0, 0.05)),limits = c(0,100)) # space on top
+                        + theme(
+                              # hide grid lines
+                              panel.grid.major=element_blank(),
+                              panel.grid.minor=element_blank(),
+                              # show axis lines
+                              axis.line=element_line(colour='black')))),
+                      stripes = upset_stripes(
+                        geom=geom_segment(size=12),  # make the stripes larger
+                        colors=c('grey95', 'white')),
+                      # to prevent connectors from getting the colorured
+                      # use `fill` instead of `color`, together with `shape='circle filled'`
+                      matrix = intersection_matrix(
+                        geom=geom_point(
+                          shape='circle filled',
+                          size=3,
+                          stroke=0.45)),
+                      sort_sets=FALSE,
+                      sort_intersections='descending'
+                    )
+  upset_gene <- upset_gene + ggtitle(paste0(i,", adj_p_val < 0.05"))
+  i <- gsub(" ","_",i)
+  i <- gsub("/","_",i)
+  i <- gsub("-","_",i)
+  pdf(paste0("../../results/pass_2/endothelial/upset/upset_",tolower(i),".pdf"), height = 6, width = 8)
+  print(upset_gene)
+  dev.off()
+}
+```
+
+## Volcano
+```{r volcano_plot, message=FALSE, eval=FALSE}
+variables <- c("E4_F_vs_E3_F","E4_M_vs_E3_M")
+all_clusters <- levels(endothelial$annotated_clusters)
+all_clusters <- all_clusters[1:6]
+
+for (i in variables) {
+  
+  # read DEG file
+  if (i == "E4_F_vs_E3_F") {
+    treatment_vs_control <- 
+      read.delim("../../results/pass_2/endothelial/DEGs/E4_F_vs_E3_F_DEGs.tsv",
+                 sep = "\t")
+  } else {
+    treatment_vs_control <-
+      read.delim("../../results/pass_2/endothelial/DEGs/E4_M_vs_E3_M_DEGs.tsv",
+                 sep = "\t")
+  }
+  
+  # assign colors
+  color_values <- vector()
+  max <- nrow(treatment_vs_control)
+  for(row in 1:max){
+    if (treatment_vs_control$p_val_adj[row] < 0.05){
+      if (treatment_vs_control$avg_log2FC [row] > 0){
+        color_values <- c(color_values, 1) # 1 when logFC > 0 and FDRq < 0.05
+      }
+      else if (treatment_vs_control$avg_log2FC[row] < 0){
+        color_values <- c(color_values, 2) # 2 when logFC < 0 and FDRq < 0.05
+      }
+    }
+    else{
+      color_values <- c(color_values, 3) # 3 when FDRq >= 0.05
+    }
+  }
+  treatment_vs_control$color_adjpval_0.05 <- factor(color_values)
+  
+  # loop through clusters
+  for (j in all_clusters) {
+    
+    # subset cluster
+    data <- subset(treatment_vs_control, cluster == j)
+    
+    # plot only if there are DEGs with p_val_adj < 0.05
+    num <- subset(data, p_val_adj < 0.05)
+    num <- nrow(num)
+    if(num != 0) {
+        
+      # subset genes to label
+      up <- data[data$color_adjpval_0.05 == 1,]
+      up10 <- up[1:10,]
+      down <- data[data$color_adjpval_0.05 == 2,]
+      down10 <- down[1:10,]
+      
+      # set manual colors
+      if (!1 %in% unique(data$color_adjpval_0.05)) {
+        my_colors <- c("blue","gray")
+      } else if (!2 %in% unique(data$color_adjpval_0.05)) {
+        my_colors <- c("red","gray")
+      } else if (!1 %in% unique(data$color_adjpval_0.05) && !2 %in% unique(data$color_adjpval_0.05)) {
+        my_colors <- c("gray")
+      } else {
+        my_colors <- c("red","blue","gray")
+      }
+      
+      # set significance threshold
+      hadjpval <- (-log10(max(
+        data$p_val[data$p_val_adj < 0.05], 
+        na.rm=TRUE)))
+
+      # plot
+      p <-
+        ggplot(data = data, 
+               aes(x = avg_log2FC,  # x-axis is logFC
+                   y = -log10(p_val),  # y-axis will be -log10 of P.Value
+                   color = color_adjpval_0.05)) +  # color is based on factored color column
+        geom_point(alpha = 0.8, size = 2) +  # create scatterplot, alpha makes points transparent
+        theme_bw() +  # set color theme
+        theme(legend.position = "none") +  # no legend
+        scale_color_manual(values = my_colors) +  # set factor colors
+        labs(
+          title = "", # no main title
+          x = expression(log[2](FC)), # x-axis title
+          y = expression(-log[10] ~ "(" ~ italic("p") ~ "-value)") # y-axis title
+        ) +
+        theme(axis.title.x = element_text(size = 10),
+              axis.text.x = element_text(size = 10)) +
+        theme(axis.title.y = element_text(size = 10),
+              axis.text.y = element_text(size = 10)) +
+        geom_hline(yintercept = hadjpval,  #  horizontal line
+                           colour = "#000000",
+                           linetype = "dashed") +
+        ggtitle(paste0(j,"\n",i,", p_val_adj < 0.05")) +
+        geom_text_repel(data = up10,
+                        aes(x = avg_log2FC, y= -log10(p_val), label = gene), 
+                        color = "maroon", 
+                        fontface="italic",
+                        max.overlaps = getOption("ggrepel.max.overlaps", default = 30)
+                        ) +
+        geom_text_repel(data = down10,
+                        aes(x = avg_log2FC, y= -log10(p_val), label = gene), 
+                        color = "navyblue", 
+                        fontface="italic",
+                        max.overlaps = getOption("ggrepel.max.overlaps", default = 30)
+                        )
+      p
+      
+      # save
+      clus <- j
+      clus <- gsub(" ","_",clus)
+      clus <- gsub("/","_",clus)
+      clus <- gsub("-","_",clus)
+      if (i == "E4_F_vs_E3_F") {
+        path <- paste0("../../results/pass_2/endothelial/volcano/E4_F_vs_E3_F/",
+                       tolower(clus),"_female_volcano")
+      } else {
+        path <- paste0("../../results/pass_2/endothelial/volcano/E4_M_vs_E3_M/",
+                       tolower(clus),"_male_volcano")      
+      }
+      pdf(paste(path,".pdf"), height = 8, width = 8)
+      print(p)
+      dev.off()
+      
+      print(paste("i =",i,", j =",j))
+      
+    }
+  } # end loop through clusters
+} # end loop through variables
+```
+
+
+# Pseudotime
+## Convert object
+```{r}
+# Convert SeuratObject to cell_data_set
+cds <- as.cell_data_set(endothelial, default.reduction = "UMAP")
+
+# Preview cell metadata
+head(colData(cds))[1:5,1:5]
+```
+
+## Transfer info
+```{r}
+# Set gene metadata
+head(fData(cds)) # empty
+head(rownames(fData(cds))) # short gene names
+fData(cds)$gene_short_name <- rownames(fData(cds)) # assign
+head(fData(cds)) # check
+
+# Preview counts
+head(counts(cds))
+
+# Transfer cluster info
+recreate.partition <- c(rep(1, length(cds@colData@rownames)))
+names(recreate.partition) <- cds@colData@rownames
+recreate.partition <- as.factor(recreate.partition)
+cds@clusters$UMAP$partitions <- recreate.partition
+cds@clusters$UMAP$clusters <- endothelial$annotated_clusters
+cds@int_colData@listData$reducedDims$UMAP <-endothelial@reductions$umap@cell.embeddings
+```
+
+## Trajectory and ordering
+```{r}
+# Learn trajectory
+cds <- learn_graph(cds, use_partition = TRUE)
+
+# Plot trajectory
+p1 <- plot_cells(cds,
+                 color_cells_by = "annotated_clusters",
+                 label_groups_by_cluster = FALSE,
+                 label_branch_points = FALSE,
+                 label_roots = FALSE,
+                 label_leaves = FALSE,
+                 group_label_size = 5) +
+  scale_color_manual(values = c("gray","firebrick1","gold","chartreuse3","cyan",
+                                      "blue","magenta")) +
+  theme(legend.position = "right")
+p1
+
+# Order cells in pseudotime
+# Must have prior knowledge of root cells - will use LECs
+cds <- order_cells(cds, 
+                   reduction_method = "UMAP", 
+                   root_cells = colnames(cds[,clusters(cds) == "LECs"]))
+
+# Plot pseudotime
+p2 <- plot_cells(cds,
+                 color_cells_by = "pseudotime",
+                 label_groups_by_cluster = FALSE,
+                 label_branch_points = FALSE,
+                 label_roots = FALSE,
+                 label_leaves = FALSE,
+                 group_label_size = 5)
+p2
+```
+
+```{r save_pseudotime, eval=FALSE, echo=FALSE}
+p1 + p2
+path <- "../../results/pass_2/endothelial/pseudotime/pseudotime.pdf"
+saveToPDF(path, height = 6, width = 14)
+dev.off()
+```
+
+## QC
+```{r}
+# split by sex
+p3 <- plot_cells(cds,
+                color_cells_by = "pseudotime",
+                label_groups_by_cluster = FALSE,
+                label_branch_points = FALSE,
+                label_roots = FALSE,
+                label_leaves = FALSE,
+                group_label_size = 5,
+                trajectory_graph_segment_size = 0.5) + 
+  facet_wrap(~sex)
+p3
+
+# split by isoform
+p4 <- plot_cells(cds,
+           color_cells_by = "pseudotime",
+           label_groups_by_cluster = FALSE,
+           label_branch_points = FALSE,
+           label_roots = FALSE,
+           label_leaves = FALSE,
+           group_label_size = 5,
+           trajectory_graph_segment_size = 0.5) + 
+  facet_wrap(~isoform)
+p4
+
+# split by sex and isoform
+p5 <- plot_cells(cds,
+           color_cells_by = "pseudotime",
+           label_groups_by_cluster = FALSE,
+           label_branch_points = FALSE,
+           label_roots = FALSE,
+           label_leaves = FALSE,
+           group_label_size = 5,
+           trajectory_graph_segment_size = 0.5) + 
+  facet_wrap(~sample2)
+p5
+```
+
+```{r save_pseudotime_qc}
+p3
+path <- "../../results/pass_2/endothelial/pseudotime/pseudotime_split_sex.pdf"
+saveToPDF(path, height = 4, width = 8)
+dev.off()
+
+p4
+path <- "../../results/pass_2/endothelial/pseudotime/pseudotime_split_isoform.pdf"
+saveToPDF(path, height = 4, width = 8)
+dev.off()
+
+p5
+path <- "../../results/pass_2/endothelial/pseudotime/pseudotime_split_sex&isoform.pdf"
+saveToPDF(path, height = 6, width = 6)
+dev.off()
+```
