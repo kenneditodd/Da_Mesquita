@@ -10,7 +10,7 @@
 #$ -j y  
 
 # change directory to your desired output folder
-cd /research/labs/neurology/fryer/m214960/Da_Mesquita/count
+cd /Da_Mesquita/count
 
 # source settings
 source $HOME/.bash_profile
@@ -26,8 +26,8 @@ echo "sample: $sample"
 cellranger count \
 	--id=$sample \
 	--sample=$sample \
-	--fastqs=/research/labs/neurology/fryer/projects/Da_Mesquita/mouse/scRNA \
-	--transcriptome=/research/labs/neurology/fryer/projects/references/mouse/refdata-gex-mm10-2020-A \
+	--fastqs=/Da_Mesquita/mouse/scRNA \
+	--transcriptome=/references/mouse/refdata-gex-mm10-2020-A \
 	--localcores=16 \
 	--localmem=50 
 
