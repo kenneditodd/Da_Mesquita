@@ -1,0 +1,11 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/1028407/635e3cd2fe5e4cf1a18fe30acfbcdfe2
+bundleId: https://api.rpubs.com/api/v1/document/1028407/635e3cd2fe5e4cf1a18fe30acfbcdfe2
+url: http://rpubs.com/kenneditodd/1028407
+when: 1681489604.17775
+lastSyncTime: 1681489604.17778

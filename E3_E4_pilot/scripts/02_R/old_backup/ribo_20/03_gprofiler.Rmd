@@ -1,0 +1,610 @@
+---
+title: "g:Profiler All Clusters"
+author: "Kennedi Todd"
+date: "10/14/2022"
+output:
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_float: true
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, echo=FALSE, warning=FALSE, message=FALSE}
+# load libraries
+library(gprofiler2)
+
+# read tables
+path <- "/research/labs/neurology/fryer/m214960/Da_Mesquita/results/DEGs/"
+isoform.df <- read.table(paste0(path,"E4_vs_E3_DEGs.tsv"), sep = "\t", header = TRUE)
+age.df <- read.table(paste0(path, "14_vs_2_months_DEGs.tsv"), sep = "\t", header = TRUE)
+sex.df <- read.table(paste0(path,"female_vs_male_DEGs.tsv"), sep = "\t", header = TRUE)
+
+# filter
+isoform.df <- isoform.df[isoform.df$p_val_adj < 0.05,]
+age.df <- age.df[age.df$p_val_adj < 0.05,]
+sex.df <- sex.df[sex.df$p_val_adj < 0.05,]
+```
+
+```{r gprofiler_function, echo=FALSE, message=FALSE, warning=FALSE}
+runGprofiler <- function(variable, cluster, direction) {
+  
+  # subset gene list based on variable, cluster, and direction
+  # variable
+  data <- data.frame()
+  if (variable == "age") {
+    data <- age.df
+  } else if (variable == "isoform") {
+    data <- isoform.df
+  } else {
+    data <- sex.df
+  }
+  
+  # cluster
+  data <- data[data$cluster == cluster,]
+  
+  # direction
+  if (direction == "up-regulated") {
+    data <- data[data$avg_log2FC > 0,]
+  } else {
+    data <- data[data$avg_log2FC < 0,]
+  }
+  
+  # gene list
+  genes <- data$gene
+  print(paste(length(genes), "genes input into functional enrichment analysis."))
+  
+  # functional analysis
+  # GO:MF, GO:BP, KEGG, and TF
+  keep_source <- c("GO:MF","GO:BP","KEGG","TF")
+  gp <- gost(genes,
+             organism = "mmusculus",
+             ordered_query = TRUE,
+             sources = keep_source,
+             evcodes = TRUE)
+  
+  # save
+  name.cluster <- gsub("-","_",cluster)
+  name.cluster <- gsub(" ","_",name.cluster)
+  name.cluster <- gsub("-","_",name.cluster)
+  name.cluster <- gsub("/","_",name.cluster)
+  name.cluster <- tolower(name.cluster)
+  name.dir <- gsub("-","",direction)
+  df <- as.data.frame(gp$result)
+  df <- apply(df,2,as.character) # flatten
+  write.table(x = df,
+              file = paste0("../../results/gprofiler/",variable,"_",
+                                      name.cluster,"_",name.dir,"_gprofiler.tsv"),
+              quote = FALSE,
+              row.names = FALSE,
+              sep = "\t")
+  
+    
+  # plot
+  gostplot(gp, 
+           interactive = TRUE, 
+           capped = FALSE,
+           pal = c(`GO:MF` = "red", `GO:BP` = "gold", 
+                   KEGG = "chartreuse3", TF = "dodgerblue"))
+}
+```
+
+Output below are interactive Manhattan plots. The x-axis has functional terms and the y-axis has the -log10(adjust p-value). The size of the circles corresponds to the term size. Term size is the number of genes in the pathway. So, GO:1234 (5) would have a smaller circle compared to GO:5678 (100) because there are 5 genes in GO:1234 pathway vs 100 genes in the GO:5678 pathway. These plots are only showing significant results. This is why some plots cannot be generated despite 10 genes used for input into the analysis. We will use genes with an adjusted p-value < 0.05 and only usin data sources from GO:MF, GO:BP, KEGG, and TF.
+
+# Age
+## Pericytes & SMCs
+### Up-regulated
+```{r}
+runGprofiler("age","Pericytes & SMCs","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("age","Pericytes & SMCs","down-regulated")
+```
+
+## Vwf+Cldn5+ BECs
+### Up-regulated
+```{r}
+runGprofiler("age","Vwf+Cldn5+ BECs","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("age","Vwf+Cldn5+ BECs","down-regulated")
+```
+
+## Vwf+ BECs & LECs
+### Up-regulated
+```{r}
+runGprofiler("age","Vwf+ BECs & LECs","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("age","Vwf+ BECs & LECs","down-regulated")
+```
+
+## Kdr-high BECs & LECs
+### Up-regulated
+```{r}
+runGprofiler("age","Kdr-high BECs & LECs","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("age","Kdr-high BECs & LECs","down-regulated")
+```
+
+## Doublets BECs / macrophages
+### Up-regulated
+```{r}
+runGprofiler("age","Doublets BECs / macrophages","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("age","Doublets BECs / macrophages","down-regulated")
+```
+
+## Mrc1+H2-Eb1-low macrophages
+### Up-regulated
+```{r}
+runGprofiler("age","Mrc1+H2-Eb1-low macrophages","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("age","Mrc1+H2-Eb1-low macrophages","down-regulated")
+```
+
+## Mrc1+H2-Eb1-high macrophages
+### Up-regulated
+```{r}
+runGprofiler("age","Mrc1+H2-Eb1-high macrophages","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("age","Mrc1+H2-Eb1-high macrophages","down-regulated")
+```
+
+## Dendritic cells
+### Up-regulated
+```{r}
+runGprofiler("age","Dendritic cells","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("age","Dendritic cells","down-regulated")
+```
+
+## Monocytes
+### Up-regulated
+```{r}
+runGprofiler("age","Monocytes","up-regulated")
+```
+### Down-regulated
+```{r}
+# 3 genes input, no results to show
+```
+
+## Neutrophils
+### Up-regulated
+```{r}
+runGprofiler("age","Neutrophils","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("age","Neutrophils","down-regulated")
+```
+
+## Mast cells
+### Up-regulated
+```{r}
+runGprofiler("age","Mast cells","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("age","Mast cells","down-regulated")
+```
+
+## Mki67+ macrophages
+### Up-regulated
+```{r}
+runGprofiler("age","Mki67+ macrophages","up-regulated")
+```
+### Down-regulated
+```{r}
+# 1 gene input, no results to show
+```
+
+## Fibroblasts
+### Up-regulated
+```{r}
+runGprofiler("age","Fibroblasts","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("age","Fibroblasts","down-regulated")
+```
+
+## Schwann cells
+### Up-regulated
+```{r}
+runGprofiler("age","Schwann cells","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("age","Schwann cells","down-regulated")
+```
+
+## T cells & ILCs
+### Up-regulated
+```{r}
+runGprofiler("age","T cells & ILCs","up-regulated")
+```
+### Down-regulated
+```{r}
+# 3 genes used for analysis
+# only has significant results in the MIRNA source
+```
+
+## Developing B cells
+### Up-regulated
+```{r}
+runGprofiler("age","Developing B cells","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("age","Developing B cells","down-regulated")
+```
+
+## Mature B cells
+### Up-regulated
+```{r}
+runGprofiler("age","Mature B cells","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("age","Mature B cells","down-regulated")
+```
+
+# Isoform
+## Pericytes & SMCs
+### Up-regulated
+```{r}
+# 4 genes input, no results to show
+```
+### Down-regulated
+```{r}
+# 0 genes input, no results to show
+```
+
+## Vwf+Cldn5+ BECs
+### Up-regulated
+```{r}
+# 1 gene input, no results to show
+```
+### Down-regulated
+```{r}
+runGprofiler("isoform","Vwf+Cldn5+ BECs","down-regulated")
+```
+
+## Vwf+ BECs & LECs
+### Up-regulated
+```{r}
+runGprofiler("isoform","Vwf+ BECs & LECs","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("isoform","Vwf+ BECs & LECs","down-regulated")
+```
+
+## Kdr-high BECs & LECs
+### Up-regulated
+```{r}
+runGprofiler("isoform","Kdr-high BECs & LECs","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("isoform","Kdr-high BECs & LECs","down-regulated")
+```
+
+## Doublets BECs / macrophages
+### Up-regulated
+```{r}
+# 0 genes input, no results to show
+```
+### Down-regulated
+```{r}
+# 1 gene input, no results to show
+```
+
+## Mrc1+H2-Eb1-low macrophages
+### Up-regulated
+```{r}
+runGprofiler("isoform","Mrc1+H2-Eb1-low macrophages","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("isoform","Mrc1+H2-Eb1-low macrophages","down-regulated")
+```
+
+## Mrc1+H2-Eb1-high macrophages
+### Up-regulated
+```{r}
+runGprofiler("isoform","Mrc1+H2-Eb1-high macrophages","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("isoform","Mrc1+H2-Eb1-high macrophages","down-regulated")
+```
+
+## Dendritic cells
+### Up-regulated
+```{r}
+runGprofiler("isoform","Dendritic cells","up-regulated")
+```
+### Down-regulated
+```{r}
+# 9 genes input, no results to show
+```
+
+## Monocytes
+### Up-regulated
+```{r}
+runGprofiler("isoform","Monocytes","up-regulated")
+```
+### Down-regulated
+```{r}
+# 3 genes input, no results to show
+```
+
+## Neutrophils
+### Up-regulated
+```{r}
+runGprofiler("isoform","Neutrophils","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("isoform","Neutrophils","down-regulated")
+```
+
+## Mast cells
+### Up-regulated
+```{r}
+# 3 genes input, no results to show
+```
+### Down-regulated
+```{r}
+# no genes input, no results to show
+```
+
+## Mki67+ macrophages
+### Up-regulated
+```{r}
+runGprofiler("isoform","Mki67+ macrophages","up-regulated")
+```
+### Down-regulated
+```{r}
+# 2 genes input, no results to show
+```
+
+## Fibroblasts
+### Up-regulated
+```{r}
+runGprofiler("isoform","Fibroblasts","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("isoform","Fibroblasts","down-regulated")
+```
+
+## Schwann cells
+### Up-regulated
+```{r}
+runGprofiler("isoform","Schwann cells","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("isoform","Schwann cells","down-regulated")
+```
+
+## T cells & ILCs
+### Up-regulated
+```{r}
+runGprofiler("isoform","T cells & ILCs","up-regulated")
+```
+### Down-regulated
+```{r}
+# 3 genes used for analysis
+# only has significant results in the MIRNA source
+```
+
+## Developing B cells
+### Up-regulated
+```{r}
+runGprofiler("isoform","Developing B cells","up-regulated")
+```
+### Down-regulated
+```{r}
+# 4 genes input, no results to show
+```
+
+## Mature B cells
+### Up-regulated
+```{r}
+runGprofiler("isoform","Mature B cells","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("isoform","Mature B cells","down-regulated")
+```
+
+# Sex
+## Pericytes & SMCs
+### Up-regulated
+```{r}
+# 3 genes input, no results to show
+```
+### Down-regulated
+```{r}
+runGprofiler("sex","Pericytes & SMCs","down-regulated")
+```
+
+## Vwf+Cldn5+ BECs
+### Up-regulated
+```{r}
+runGprofiler("sex","Vwf+Cldn5+ BECs","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("sex","Vwf+Cldn5+ BECs","down-regulated")
+```
+
+## Vwf+ BECs & LECs
+### Up-regulated
+```{r}
+runGprofiler("sex","Vwf+ BECs & LECs","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("sex","Vwf+ BECs & LECs","down-regulated")
+```
+
+## Kdr-high BECs & LECs
+### Up-regulated
+```{r}
+runGprofiler("sex","Kdr-high BECs & LECs","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("sex","Kdr-high BECs & LECs","down-regulated")
+```
+
+## Doublets BECs / macrophages
+### Up-regulated
+```{r}
+# 2 genes input, no results to show
+```
+### Down-regulated
+```{r}
+runGprofiler("sex","Doublets BECs / macrophages","down-regulated")
+```
+
+## Mrc1+H2-Eb1-low macrophages
+### Up-regulated
+```{r}
+runGprofiler("sex","Mrc1+H2-Eb1-low macrophages","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("sex","Mrc1+H2-Eb1-low macrophages","down-regulated")
+```
+
+## Mrc1+H2-Eb1-high macrophages
+### Up-regulated
+```{r}
+runGprofiler("sex","Mrc1+H2-Eb1-high macrophages","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("sex","Mrc1+H2-Eb1-high macrophages","down-regulated")
+```
+
+## Dendritic cells
+### Up-regulated
+```{r}
+# 9 genes input, no results to show
+```
+### Down-regulated
+```{r}
+runGprofiler("sex","Dendritic cells","down-regulated")
+```
+
+## Monocytes
+### Up-regulated
+```{r}
+# 6 genes input, no results to show
+```
+### Down-regulated
+```{r}
+runGprofiler("sex","Monocytes","down-regulated")
+```
+
+## Neutrophils
+### Up-regulated
+```{r}
+runGprofiler("sex","Neutrophils","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("sex","Neutrophils","down-regulated")
+```
+
+## Mast cells
+### Up-regulated
+```{r}
+runGprofiler("sex","Mast cells","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("sex","Mast cells","down-regulated")
+```
+
+## Mki67+ macrophages
+### Up-regulated
+```{r}
+# 2 genes input, no results to show
+```
+### Down-regulated
+```{r}
+runGprofiler("sex","Mki67+ macrophages","down-regulated")
+```
+
+## Fibroblasts
+### Up-regulated
+```{r}
+runGprofiler("sex","Fibroblasts","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("sex","Fibroblasts","down-regulated")
+```
+
+## Schwann cells
+### Up-regulated
+```{r}
+runGprofiler("sex","Schwann cells","up-regulated")
+```
+### Down-regulated
+```{r}
+runGprofiler("sex","Schwann cells","down-regulated")
+```
+
+## T cells & ILCs
+### Up-regulated
+```{r}
+runGprofiler("sex","T cells & ILCs","up-regulated")
+```
+### Down-regulated
+```{r}
+# 3 genes used for analysis
+# only has significant results in the MIRNA source
+```
+
+## Developing B cells
+### Up-regulated
+```{r}
+# 3 genes input, no results to show
+```
+### Down-regulated
+```{r}
+# 8 genes input, no results to show
+```
+
+## Mature B cells
+### Up-regulated
+```{r}
+# 5 genes input, no results to show
+```
+### Down-regulated
+```{r}
+runGprofiler("sex","Mature B cells","down-regulated")
+```
+

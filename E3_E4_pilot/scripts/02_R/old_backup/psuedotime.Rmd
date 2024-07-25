@@ -1,0 +1,92 @@
+---
+title: "Pseudotime"
+author: "Kennedi Todd"
+date: "7/21/2022"
+output:
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_float: true
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r working_directory, echo=FALSE}
+knitr::opts_knit$set(
+  root.dir = "/research/labs/neurology/fryer/m214960/Da_Mesquita/scripts/R")
+```
+
+- [Heterogeneity of meningeal B cells reveals a lymphopoietic niche at the CNS borders](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8448524/) \
+- The Colonna paper above found pseudotime trajectories using the R packages destiny and slingshot \
+- destiny \
+  + destiny is a R package for creating diffusion maps
+  + Diffusion maps are a type of dimensional reduction. You may be familiar with other types of dimensional reduction such as PCA, MDS, and UMAP. \
+  + PCA is a linear dimensional reduction whereas a diffusion map is nonlinear. \
+  + Gene expression data should be preprocessed and normalized before diffusion map generation \
+    - A variance-stabilizing transformation should be used like a logarithm or the square root \
+  + [destiny GitHub page](https://github.com/theislab/destiny) \
+  + [destiny publication](https://academic.oup.com/bioinformatics/article/32/8/1241/1744143) \
+    - supplementary materials has helpful information \
+- slingshot \
+  + slingshot
+
+```{r}
+# load libraries
+library(destiny)
+library(Seurat)
+library(slingshot)
+
+# read object
+endothelial.annotated <- readRDS("../../rObjects/mouse_endothelial_annotated.rds")
+DefaultAssay(endothelial.annotated) <- "RNA"
+Idents(endothelial.annotated) <- "individual_clusters"
+
+# plot current UMAP
+DimPlot(endothelial.annotated,
+        cols = c("firebrick1","gold","green","cyan","blue","darkorchid1", "lightgray"))
+
+# log transform data
+# subset to top 2000 variable features since run time takes forever
+counts <- as.data.frame(GetAssayData(object = endothelial.annotated, slot = "counts"))
+celltype <- endothelial.annotated$merged_clusters
+var.features <- endothelial.annotated@assays$SCT@var.features
+counts <- counts[var.features,]
+log2.counts <- log2(counts + 0.01)
+
+# create ExpressionSet object
+obj <- as.ExpressionSet(as.data.frame(t(counts)))
+obj$celltype <- endothelial.annotated@meta.data$individual_clusters
+
+# diffusion map
+k <- find_dm_k(nrow(obj))
+dm <- DiffusionMap(obj, n_pcs = 50, k = k)
+
+# plot diffusion map
+plot(dm, 1:2,
+     col_by = "celltype")
+plot(dm,
+     col_by = "celltype")
+
+# Use slingshot for trajectory inferance (TI)
+sce <- as.SingleCellExperiment(endothelial.annotated)
+embed <- cbind(dm$DC1, dm$DC2, dm$DC3)
+colnames(embed) <- c("DM1","DM2","DM3")
+reducedDim(sce, "DM", withDimnames= TRUE) <- embed
+reducedDim(sce, "PCA", withDimnames=TRUE) <- endothelial.annotated[['pca']]@cell.embeddings
+reducedDim(sce, "UMAP", withDimnames=TRUE) <- endothelial.annotated[['umap']]@cell.embeddings
+labels <- as.vector(endothelial.annotated$individual_clusters)
+
+sce <- slingshot(obj, clusterLabels = labels, reducedDim = 'DM')
+```
+
+# Diffusion mapping
+Haghverdi et al. developed a method called ‘Diffusion Maps’ to infer the temporal order of differentiating cells by modeling it as a diffusion process. Diffusion maps is a nonlinear method that could better resolve complex trajectories and branching than linear methods such as PCA. This method has been implemented in the R packaged destiny. [Diffusion mapping](https://danhdtruong.com/Diffusion-Pseudotime/)
+
+```{r}
+matrix <- assay(HSMM, i = 'logcounts') #  Prepare a counts matrix with labeled rows and columns.
+
+dm <- DiffusionMap(t(matrix), n_pcs = 50) # Make a diffusion map.
+reducedDim(HSMM, type = 'DC') <- dm@eigenvectors
+plotReducedDim(HSMM, dimred="DC", colour_by="Hours")
+```
+

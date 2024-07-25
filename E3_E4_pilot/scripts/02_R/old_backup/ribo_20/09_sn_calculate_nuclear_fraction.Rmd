@@ -1,0 +1,66 @@
+---
+title: "Calculate Nuclear Fraction"
+author: "Kennedi Todd"
+date: "01/03/2023"
+output:
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_float: true
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Setup
+## Set working directory
+```{r working_directory}
+knitr::opts_knit$set(root.dir = "/research/labs/neurology/fryer/m214960/10x_HIVE_PIPseq/10x/scripts/03_R/single_nucleus")
+```
+
+## Load libraries
+```{r load_libraries}
+library(dplyr)
+library(Seurat)
+library(ggpubr)     # gghistogram()
+library(harmony)
+library(tidyr)
+library(tidyverse)
+library(DropletQC)
+```
+
+## Load data
+Use filtered feature bc matrix output from Cell Ranger.
+```{r load_data}
+prefix <- "../../../counts/"
+suffix <- "/outs/filtered_feature_bc_matrix.h5"
+
+sn.wt <- CreateSeuratObject(Read10X_h5(paste0(prefix,"x10_sn_WT",suffix)))
+sn.app <- CreateSeuratObject(Read10X_h5(paste0(prefix,"x10_sn_APP",suffix)))
+```
+
+# Calculate intronic read ratio
+## WT
+- nuclear fraction = # intronic reads / (# intronic reads + # of exonic reads) \
+- The nuclear_fraction_tag() function uses Cell Ranger's output BAM file to calculate nuclear fraction. The BAM file contains tags for reads algined to an intron or exon. \
+- This takes ~11 minutes per sample. \
+```{r wt_nuclear_fraction, eval=FALSE}
+# calculate nuclear fraction using BAM tags
+dir <- "../../../counts/x10_sn_WT/outs/"
+wt.tags <- nuclear_fraction_tags(outs = dir,
+                                 cores = 4,
+                                 verbose = TRUE)
+write.table(wt.tags, "../../../refs/x10_sn_wt_nuclear_fraction.tsv",
+            quote = FALSE, sep = "\t", col.names = TRUE, row.names = TRUE)
+```
+
+## APP
+```{r app_nuclear_fraction, eval=FALSE}
+# calculate nuclear fraction using BAM tags
+dir <- "../../../counts/x10_sn_APP/outs/"
+app.tags <- nuclear_fraction_tags(outs = dir,
+                                 cores = 4,
+                                 verbose = TRUE)
+write.table(app.tags, "../../../refs/x10_sn_app_nuclear_fraction.tsv",
+            quote = FALSE, sep = "\t", col.names = TRUE, row.names = TRUE)
+```
+
