@@ -2,17 +2,17 @@
 library(stringr)
 
 # file locations
-locations <- c("/research/labs/neurology/fryer/m214960/Da_Mesquita/count/E3_2M_F/outs/metrics_summary.csv",
-               "/research/labs/neurology/fryer/m214960/Da_Mesquita/count/E3_2M_M/outs/metrics_summary.csv",
-               "/research/labs/neurology/fryer/m214960/Da_Mesquita/count/E3_14M_F/outs/metrics_summary.csv",
-               "/research/labs/neurology/fryer/m214960/Da_Mesquita/count/E3_14M_M/outs/metrics_summary.csv",
-               "/research/labs/neurology/fryer/m214960/Da_Mesquita/count/E4_2M_F/outs/metrics_summary.csv",
-               "/research/labs/neurology/fryer/m214960/Da_Mesquita/count/E4_2M_M/outs/metrics_summary.csv",
-               "/research/labs/neurology/fryer/m214960/Da_Mesquita/count/E4_14M_F/outs/metrics_summary.csv",
-               "/research/labs/neurology/fryer/m214960/Da_Mesquita/count/E4_14M_M/outs/metrics_summary.csv")
+locations <- c("/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/E3_2M_F/outs/metrics_summary.csv",
+               "/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/E3_2M_M/outs/metrics_summary.csv",
+               "/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/E3_14M_F/outs/metrics_summary.csv",
+               "/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/E3_14M_M/outs/metrics_summary.csv",
+               "/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/E4_2M_F/outs/metrics_summary.csv",
+               "/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/E4_2M_M/outs/metrics_summary.csv",
+               "/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/E4_14M_F/outs/metrics_summary.csv",
+               "/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/E4_14M_M/outs/metrics_summary.csv")
 
 # sample names
-names <- str_match(locations, "/research/labs/neurology/fryer/m214960/Da_Mesquita/count/(.+)/outs/metrics_summary.csv")[,2]
+names <- str_match(locations, "/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/(.+)/outs/metrics_summary.csv")[,2]
 
 # initialize df and loop through files
 df <- data.frame()
@@ -35,7 +35,7 @@ c.names <- c("estimated_cells", "mean_reads", "median_genes", "number_reads",
 colnames(df) <- c.names
 
 write.table(df, 
-            "/research/labs/neurology/fryer/m214960/Da_Mesquita/count/web_summaries/overall_metrics.tsv",
+            "/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/web_summaries/overall_metrics.tsv",
             sep = "\t",
             quote = FALSE)
 
