@@ -1,6 +1,4 @@
 # PLX5622_mice
-E3 and E4, male and female mice (12-month-old) fed a control diet or a PLX5622 diet
-
 - 16 scRNAseq samples of meningeal endothelial cells were sent for sequencing.
 - Sequenced ~5000 cells at 50k read pairs per cell.
 - In this experiment we treated E3 and E4, male and female mice (12-month-old), with a control diet or a PLX5622 diet
