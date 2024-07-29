@@ -1,6 +1,7 @@
 # environment files
 .Rproj.user
 Da_Mesquita.Rproj
+.gitignore
 
 # PLX5622_mice
 PLX5622_diet/counts
