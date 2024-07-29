@@ -758,7 +758,7 @@ variance of the raw filtered data, and identifying the most variable genes. \
 - Variation in sequencing depth (total nCount_RNA per cell) is normalized using 
 a regularized negative binomial model. \
 - If there are other sources of uninteresting variation it can be included. \
-```{r split_object2}
+```{r split_object}
 # split
 mouse.filtered[["RNA"]] <- split(mouse.filtered[["RNA"]], 
                                  f = mouse.filtered$sample)
