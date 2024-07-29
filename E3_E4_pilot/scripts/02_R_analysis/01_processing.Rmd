@@ -1,10 +1,11 @@
 ---
-title: "Mouse Meningeal Dura scRNAseq"
+title: "E3/E4 Mice Meningeal Dura scRNAseq"
 subtitle: "Filtering, Normalization, Clustering"
 author: "Kennedi Todd"
-date: "04/04/2023"
+date: "07/26/2024"
 output:
   html_document:
+    code_folding: hide
     theme: cerulean
     toc: true
     toc_float: true
@@ -32,6 +33,7 @@ located on most haematopoietic cells, positive selection of leukocytes \
   + E4_14M_F = APOE4 expressing; 14 months old; female \
   + E4_2M_M = APOE4 expressing; 2 months old; male \
   + E4_14M_M = APOE4 expressing; 14 months old; male \
+- The analysis was subset to only 14 month old mice (4 samples) after the first pass was viewed
 
 # Setup
 ## Set working directory
@@ -41,7 +43,6 @@ knitr::opts_knit$set(root.dir = ".")
 
 ## Load libraries
 ```{r libraries, message=FALSE, warnings=FALSE}
-# load libraries
 library(cowplot)     # plot_grid()
 library(dplyr)       # left_join()
 library(ggplot2)     # ggplot()
@@ -54,8 +55,9 @@ library(stringr)     # str_match()
 ```
 
 ## Variables and functions
-```{r set_variables_and_thresholds}
+```{r set_variables_thresholds_functions}
 # variables
+out <- "../../results/pass_1/all_clusters/"
 sample_order <- c("E3.M","E3.F","E4.M","E4.F")
 sample_colors <- c("#26946A","#1814A1","#EAC941","#DF5F00")
 sample_order2 <- c("Male E3", "Male E4", "Female E3", "Female E4")
@@ -73,10 +75,8 @@ mt.cutoff <- 20
 ribo.cutoff <- 50
 hb.cutoff <- 3
 
-# single cell functions
-source("../../refs/Kennedi_single_cell_functions.R")
-
-# save function
+# functions
+source("../../../functions/Kennedi_single_cell_functions.R")
 saveToPDF <- function(...) {
     d = dev.copy(pdf,...)
     dev.off(d)
@@ -86,7 +86,7 @@ saveToPDF <- function(...) {
 # Load data
 ## Merge h5
 ```{r read_h5, warning=FALSE}
-prefix <- "../../count/"
+prefix <- "../../counts/"
 suffix <- "/outs/filtered_feature_bc_matrix.h5"
 
 if (file.exists("../../rObjects/raw_h5.rds")) {
@@ -198,7 +198,7 @@ ncells1 <- ggplot(data, aes(x = sample, y = frequency, fill = sample)) +
             position=position_dodge(width=0.9), 
             vjust=-0.25) +
   scale_fill_manual(values = sample_colors) + 
-  scale_y_continuous(breaks = seq(0,12000, by = 3000), limits = c(0,12000)) +
+  scale_y_continuous(breaks = seq(0,12000, by = 2000), limits = c(0,12000)) +
   ggtitle("Raw: cells per sample") +
   theme(legend.position =  "none") + 
   theme(axis.text.x = element_text(angle = 45, hjust=1))
@@ -220,8 +220,8 @@ den1 <- ggplot(mouse@meta.data,
   xlab("nCount_RNA") +
   ylab("Density") +
   theme(legend.position =  "none") +
-  geom_vline(xintercept = nCount.min) +
-  geom_vline(xintercept = nCount.max) +
+  geom_vline(xintercept = nCount.min, linetype = "dashed", colour = "red") +
+  geom_vline(xintercept = nCount.max, linetype = "dashed", colour = "red") +
   theme(legend.key.size = unit(0.25, 'cm'), legend.title = element_text(size=9))
 
 # Visualize nFeature_RNA
@@ -237,7 +237,7 @@ den2 <- ggplot(mouse@meta.data,
   scale_fill_manual(values = sample_colors) +
   xlab("nFeature_RNA") +
   ylab("Density") +
-  geom_vline(xintercept = nFeature.min) +
+  geom_vline(xintercept = nFeature.min, linetype = "dashed", colour = "red") +
   theme(legend.key.size = unit(0.25, 'cm'), legend.title = element_text(size=9))
 
 # Visualize cell complexity
@@ -253,7 +253,7 @@ den3 <- ggplot(mouse@meta.data,
   scale_fill_manual(values = sample_colors) +
   xlab("Cell Complexity (log10(nFeature/nCount))") +
   ylab("Density") +
-  geom_vline(xintercept = complexity.cutoff) +
+  geom_vline(xintercept = complexity.cutoff, linetype = "dashed", colour = "red") +
   theme(legend.key.size = unit(0.25, 'cm'), legend.title = element_text(size=9))
 
 # Visualize percent.mt
@@ -264,7 +264,7 @@ den4 <- ggplot(mouse@meta.data,
   geom_density(alpha = 0.2) +
   theme_classic() +
   scale_x_continuous(n.breaks = 4) +
-  geom_vline(xintercept = mt.cutoff) +
+  geom_vline(xintercept = mt.cutoff, linetype = "dashed", colour = "red") +
   scale_color_manual(values = sample_colors) +
   theme(legend.position =  "none") +
   scale_fill_manual(values = sample_colors) +
@@ -280,7 +280,6 @@ den5 <- ggplot(mouse@meta.data,
   geom_density(alpha = 0.2) +
   theme_classic() +
   scale_x_log10() +
-  geom_vline(xintercept = ribo.cutoff) +
   scale_color_manual(values = sample_colors) +
   theme(legend.position =  "none") +
   scale_fill_manual(values = sample_colors) +
@@ -296,7 +295,7 @@ den6 <- ggplot(mouse@meta.data,
   geom_density(alpha = 0.2) +
   theme_classic() +
   scale_x_log10() +
-  geom_vline(xintercept = hb.cutoff) +
+  geom_vline(xintercept = hb.cutoff, linetype = "dashed", colour = "red") +
   scale_color_manual(values = sample_colors) +
   theme(legend.position =  "none") +
   scale_fill_manual(values = sample_colors) +
@@ -310,12 +309,11 @@ layout <- rbind(c(1,4),c(2,5),c(3,6))
 grid <- grid.arrange(grobs = plots, layout_matrix = layout)
 ```
 
-```{r save_prefiltering_density,echo=FALSE,eval=FALSE}
+```{r save_prefiltering_density, echo=FALSE, eval=FALSE}
 # save
+path <- paste0(out, "filtering_QC/density_curves_raw.pdf")
+pdf(path, width = 8, height = 8)
 grid <- grid.arrange(grobs = plots, layout_matrix = layout)
-path <- paste0("../../results/pass_1/all_clusters/filtering_QC/density_curves_raw")
-saveToPDF(paste0(path, ".pdf"), width = 8, height = 8)
-dev.off()
 
 # cleanup
 remove(den1,den2,den3,den4,den5,den6,layout,grid,plots,data)
@@ -344,15 +342,15 @@ v2
 
 ```{r save_prefiltering_violins, echo=FALSE, eval=FALSE}
 # save v1
+path <- paste0(out, "filtering_QC/violins_nFeature_nCount_complexity_raw.pdf")
+pdf(path, width = 12, height = 4)
 v1
-path <- paste0("../../results/pass_1/all_clusters/filtering_QC/violins_nFeature_nCount_complexity_raw")
-saveToPDF(paste0(path, ".pdf"), width = 8, height = 4)
 dev.off()
 
 # save v2
+path <- paste0(out, "filtering_QC/violins_percent_raw.pdf")
+pdf(path, width = 12, height = 4)
 v2
-path <- paste0("../../results/pass_1/all_clusters/filtering_QC/violins_percent_raw")
-saveToPDF(paste0(path, ".pdf"), width = 8, height = 4)
 dev.off()
 
 # cleanup
@@ -369,8 +367,8 @@ s1 <- ggplot(
 	scale_x_log10() +   	
   scale_y_log10() + 
   theme_classic() +
-  geom_vline(xintercept = nCount.min) + 
-  geom_hline(yintercept = nFeature.min) + 
+  geom_vline(xintercept = nCount.min, linetype = "dashed", colour = "red") + 
+  geom_hline(yintercept = nFeature.min, linetype = "dashed", colour = "red") + 
   facet_wrap(~sample) +
   scale_colour_gradient(low = "gray90", high = "black", limits =c(0,100))
 s1
@@ -386,14 +384,14 @@ s2
 
 ```{r save_prefiltering_scatter, echo=FALSE, eval=FALSE, warning=FALSE, message=FALSE}
 # save
+path <- paste0(out, "filtering_QC/scatter_nFeature_vs_nCount_raw.pdf")
+pdf(path, width = 8, height = 8)
 s1
-path <- paste0("../../results/pass_1/all_clusters/filtering_QC/scatter_nFeature_vs_nCount_raw")
-saveToPDF(paste0(path, ".pdf"), width = 6, height = 6)
 dev.off()
 
+path <- paste0(out, "filtering_QC/scatter_percentMT_vs_nCount_raw.pdf")
+pdf(path, width = 6, height = 6)
 s2
-path <- paste0("../../results/pass_1/all_clusters/filtering_QC/scatter_percentMT_vs_nCount_raw")
-saveToPDF(paste0(path, ".pdf"), width = 6, height = 6)
 dev.off()
 
 # cleanup
@@ -405,13 +403,12 @@ remove(s1,s2)
 ```{r cell_filtering}
 # filter
 mouse.filtered <- subset(mouse,
-                        subset = (nCount_RNA > nCount.min) &
-                          (nCount_RNA < nCount.max) &
-                          (nFeature_RNA > nFeature.min) &
-                          (cell.complexity > complexity.cutoff) &
-                          (percent.mt < mt.cutoff) &
-                          (percent.ribo.protein < ribo.cutoff) &
-                          (percent.hb < hb.cutoff))
+                         subset = (nCount_RNA > nCount.min) &
+                           (nCount_RNA < nCount.max) &
+                           (nFeature_RNA > nFeature.min) &
+                           (cell.complexity > complexity.cutoff) &
+                           (percent.mt < mt.cutoff) &
+                           (percent.hb < hb.cutoff))
 
 # print cells removed
 print(paste0(dim(mouse)[2] - dim(mouse.filtered)[2]," cells removed"))
@@ -421,7 +418,8 @@ print(paste0(dim(mouse)[2] - dim(mouse.filtered)[2]," cells removed"))
 Remove lowly expressed genes.  We will keep genes that have at least 1 count in 10 cells.
 ```{r gene_filtering, warning=FALSE, message=FALSE}
 # filter genes
-counts <- GetAssayData(object = mouse.filtered, slot = "counts")
+mouse.filtered <- JoinLayers(mouse.filtered)
+counts <- GetAssayData(object = mouse.filtered, layer = "counts")
 nonzero <- counts > 0  # produces logical
 keep <- Matrix::rowSums(nonzero) >= 10  # sum the true/false
 counts.filtered <- counts[keep,]  # keep certain genes
@@ -434,27 +432,12 @@ mouse.filtered <- CreateSeuratObject(counts.filtered,
 print(paste0(dim(counts)[1] - dim(counts.filtered)[1], " features removed"))
 ```
 
-Multiple passes were made to assess whether mitochondrial, ribosomal, and immunoglobulin genes should be removed. Ultimately, removal of these genes enhanced clustering.
+Remove highly abundant mitochondrial transcripts.
 ```{r remove_specific_genes}
 # remove mt.genes
-counts <- GetAssayData(object = mouse.filtered, slot = "counts")
+counts <- GetAssayData(object = mouse.filtered, layer = "counts")
 keep <- !rownames(counts) %in% mt.genes # false when mt.gene
 counts.filtered <- counts[keep,]
-
-# remove ribo.genes
-keep <- !rownames(counts.filtered) %in% ribo.combined
-counts.filtered <- counts.filtered[keep,]
-
-# remove Ig genes + Jchain but keep Igha + Ighd to enhance clustering
-gene.types <- c("IG_C_gene","IG_C_pseudogene","IG_D","IG_J_gene","IG_LV_gene",
-                "IG_V_gene","IG_V_pseudogene")
-keep <- (genes$gene_type) %in% gene.types
-ig.genes <- genes[keep,]
-ig.genes <- c(ig.genes$gene_name, "Jchain")
-ig.genes <- ig.genes[-c(185,192)] # keep Igha and Ighd
-ig.genes
-keep <- !rownames(counts.filtered) %in% ig.genes
-counts.filtered <- counts.filtered[keep,]
 
 # overwrite mouse.filtered
 mouse.filtered <- CreateSeuratObject(counts.filtered,
@@ -486,22 +469,22 @@ ncells2 <- ggplot(data, aes(x = sample, y = frequency, fill = sample)) +
             position=position_dodge(width=0.9), 
             vjust=-0.25) +
   scale_fill_manual(values = sample_colors) + 
-  scale_y_continuous(breaks = seq(0,12000, by = 3000), limits = c(0,12000)) +
+  scale_y_continuous(breaks = seq(0,12000, by = 2000), limits = c(0,12000)) +
   ggtitle("Filtered: cells per sample") +
   theme(legend.position =  "none") + 
   theme(axis.text.x = element_text(angle = 45, hjust=1))
 
 # Arrange graphs in grid
 plots <- list(ncells1,ncells2)
-layout <- cbind(c(1),c(2))
+layout <- rbind(c(1),c(2))
 grid <- grid.arrange(grobs = plots, layout_matrix = layout)
 ```
 
 ```{r save_cells_per_sample,echo=FALSE,eval=FALSE}
 # save
+path <- paste0(out, "filtering_QC/cells_per_sample_before_and_after_filtering.pdf")
+pdf(path, width = 8, height = 8)
 grid <- grid.arrange(grobs = plots, layout_matrix = layout)
-path <- "../../results/pass_1/all_clusters/filtering_QC/cells_per_sample_before_and_after_filtering"
-saveToPDF(paste0(path, ".pdf"), width = 8, height = 4)
 dev.off()
 
 # cleanup
@@ -523,8 +506,8 @@ den1 <- ggplot(mouse.filtered@meta.data,
   xlab("nCount_RNA") +
   ylab("Density") +
   theme(legend.position =  "none") +
-  geom_vline(xintercept = nCount.min) +
-  geom_vline(xintercept = nCount.max) +
+  geom_vline(xintercept = nCount.min, linetype = "dashed", colour = "red") +
+  geom_vline(xintercept = nCount.max, linetype = "dashed", colour = "red") +
   theme(legend.key.size = unit(0.25, 'cm'), legend.title = element_text(size=9))
 
 # Visualize nFeature_RNA
@@ -540,7 +523,7 @@ den2 <- ggplot(mouse.filtered@meta.data,
   scale_fill_manual(values = sample_colors) +
   xlab("nFeature_RNA") +
   ylab("Density") +
-  geom_vline(xintercept = nFeature.min) +
+  geom_vline(xintercept = nFeature.min, linetype = "dashed", colour = "red") +
   theme(legend.key.size = unit(0.25, 'cm'), legend.title = element_text(size=9))
 
 # Visualize cell complexity
@@ -556,7 +539,7 @@ den3 <- ggplot(mouse.filtered@meta.data,
   scale_fill_manual(values = sample_colors) +
   xlab("Cell Complexity (log10(nFeature/nCount))") +
   ylab("Density") +
-  geom_vline(xintercept = complexity.cutoff) +
+  geom_vline(xintercept = complexity.cutoff, linetype = "dashed", colour = "red") +
   theme(legend.key.size = unit(0.25, 'cm'), legend.title = element_text(size=9))
 
 # Visualize percent.mt
@@ -567,7 +550,7 @@ den4 <- ggplot(mouse.filtered@meta.data,
   geom_density(alpha = 0.2) +
   theme_classic() +
   scale_x_continuous(n.breaks = 4) +
-  geom_vline(xintercept = mt.cutoff) +
+  geom_vline(xintercept = mt.cutoff, linetype = "dashed", colour = "red") +
   scale_color_manual(values = sample_colors) +
   theme(legend.position =  "none") +
   scale_fill_manual(values = sample_colors) +
@@ -583,7 +566,6 @@ den5 <- ggplot(mouse.filtered@meta.data,
   geom_density(alpha = 0.2) +
   theme_classic() +
   scale_x_log10() +
-  geom_vline(xintercept = ribo.cutoff) +
   scale_color_manual(values = sample_colors) +
   theme(legend.position =  "none") +
   scale_fill_manual(values = sample_colors) +
@@ -599,7 +581,7 @@ den6 <- ggplot(mouse.filtered@meta.data,
   geom_density(alpha = 0.2) +
   theme_classic() +
   scale_x_log10() +
-  geom_vline(xintercept = hb.cutoff) +
+  geom_vline(xintercept = hb.cutoff, linetype = "dashed", colour = "red") +
   scale_color_manual(values = sample_colors) +
   theme(legend.position =  "none") +
   scale_fill_manual(values = sample_colors) +
@@ -615,9 +597,9 @@ grid <- grid.arrange(grobs = plots, layout_matrix = layout)
 
 ```{r save_postfiltering_density, echo=FALSE, eval=FALSE, warning=FALSE}
 # save
+path <- paste0(out, "filtering_QC/density_curves_filtered.pdf")
+pdf(path, width = 8, height = 8)
 grid <- grid.arrange(grobs = plots, layout_matrix = layout)
-path <- "../../results/pass_1/all_clusters/filtering_QC/density_curves_filtered"
-saveToPDF(paste0(path, ".pdf"), width = 8, height = 8)
 dev.off()
 
 # cleanup
@@ -647,15 +629,15 @@ v4
 
 ```{r save_postfiltering_violins, echo=FALSE, eval=FALSE}
 # save
+path <- paste0(out, "filtering_QC/violins_nFeature_nCount_complexity_filtered.pdf")
+pdf(path, width = 12, height = 4)
 v3
-path <- paste0("../../results/pass_1/all_clusters/filtering_QC/violins_nFeature_nCount_complexity_filtered")
-saveToPDF(paste0(path, ".pdf"), width = 8, height = 4)
 dev.off()
 
 # save
+path <- paste0(out, "filtering_QC/violins_percent_filtered.pdf")
+pdf(path, width = 12, height = 4)
 v4
-path <- paste0("../../results/pass_1/all_clusters/filtering_QC/violins_percent_filtered")
-saveToPDF(paste0(path, ".pdf"), width = 8, height = 4)
 dev.off()
 
 # cleanup
@@ -672,8 +654,8 @@ s3 <- ggplot(
 	scale_x_log10() +   	
   scale_y_log10() + 
   theme_classic() +
-  geom_vline(xintercept = nCount.min) + 
-  geom_hline(yintercept = nFeature.min) + 
+  geom_vline(xintercept = nCount.min, linetype = "dashed", colour = "red") + 
+  geom_hline(yintercept = nFeature.min, linetype = "dashed", colour = "red") + 
   facet_wrap(~sample) +
   scale_colour_gradient(low = "gray90", high = "black", limits =c(0,100))
 s3
@@ -689,14 +671,14 @@ s4
 
 ```{r save_postfiltering_scatter,echo=FALSE,eval=FALSE}
 # save
+path <- paste0(out, "filtering_QC/scatter_nFeature_vs_nCount_filtered.pdf")
+pdf(path, width = 8, height = 8)
 s3
-path <- paste0("../../results/pass_1/all_clusters/filtering_QC/scatter_nFeature_vs_nCount_filtered")
-saveToPDF(paste0(path, ".pdf"), width = 6, height = 6)
 dev.off()
 
+path <- paste0(out, "filtering_QC/scatter_nCount_vs_percentMT_filtered.pdf")
+pdf(path, width = 6, height = 6)
 s4
-path <- "../../results/pass_1/all_clusters/filtering_QC/scatter_nCount_vs_percentMT_filtered"
-saveToPDF(paste0(path, ".pdf"), width = 6, height = 6)
 dev.off()
 
 # cleanup
@@ -723,9 +705,9 @@ b1
 
 ```{r save_boxplot,echo=FALSE,eval=FALSE}
 # save
+path <- paste0(out, "filtering_QC/boxplot_nFeature_per_sample.pdf")
+pdf(path, width = 8, height = 6)
 b1
-path <- "../../results/pass_1/all_clusters/filtering_QC/boxplot_nFeature_per_sample"
-saveToPDF(paste0(path, ".pdf"), width = 6, height = 6)
 dev.off()
 
 # cleanup
@@ -744,22 +726,26 @@ head(df, 10)
 
 ```{r save_top_transcripts,echo=FALSE,eval=FALSE}
 write.table(df, 
-            "../../results/pass_1/all_clusters/filtering_QC/top_transcripts.tsv",
+            paste0(out, "filtering_QC/top_transcripts.tsv"),
             quote = FALSE,
-            row.names = TRUE)
+            row.names = FALSE)
+remove(df)
 ```
 
 # Unwanted variation
 ## Cell cycle
+- [Evaluating effects of cell cycle](https://hbctraining.github.io/scRNA-seq_online/lessons/06_SC_SCT_normalization.html)
 ```{r cell_cycle, eval=FALSE}
-path <- "../../results/pass_1/all_clusters/unwanted_variation"
+markers <- "../../../functions/cell_cycle_markers.tsv"
+path <- paste0(out, "unwanted_variation")
 mouse.filtered[["phase"]] <- cell_cycle_QC(obj = mouse.filtered,
+                                           markersPath = markers,
                                            species = "mouse",
                                            outDir = path)
 ```
 
 ## Mitochondria
-[Evaluating effects of mitochondrial expression](https://hbctraining.github.io/scRNA-seq_online/lessons/06_SC_SCT_normalization.html)
+- [Evaluating effects of mitochondrial expression](https://hbctraining.github.io/scRNA-seq_online/lessons/06_SC_SCT_normalization.html)
 ```{r mitochondria_factor, eval=FALSE}
 mouse.filtered[["mito.factor"]] <- mitochondria_QC(obj = mouse.filtered,
                                                    outDir = path)
@@ -772,119 +758,197 @@ variance of the raw filtered data, and identifying the most variable genes. \
 - Variation in sequencing depth (total nCount_RNA per cell) is normalized using 
 a regularized negative binomial model. \
 - If there are other sources of uninteresting variation it can be included. \
-- Keep the 8 samples as separate objects as that is what is required for integration. \
 ```{r split_object2}
 # split
-mouse.split <- SplitObject(mouse.filtered, split.by = "sample")
-mouse.split
+mouse.filtered[["RNA"]] <- split(mouse.filtered[["RNA"]], 
+                                 f = mouse.filtered$sample)
 
-# cleanup
-remove(mouse.filtered)
-```
-
-- SCTransform output can generate large R objects/variables in terms of memory. \
-- Since we have a large dataset, we will adjust the limit for allowable object 
-sizes within R (Default is 500 * 1024 ^ 2 = 500 Mb). \
-```{r sct, message=FALSE, warning=FALSE}
-options(future.globals.maxSize = 4000 * 1024^5)
-
-for (i in 1:length(mouse.split)) {
-  print(paste0("Sample ", i))
-  mouse.split[[i]] <- SCTransform(mouse.split[[i]], verbose = FALSE)
-}
-
-mouse.split
+# transform
+mouse.filtered <- SCTransform(mouse.filtered, verbose = FALSE)
 ```
 
 - NOTE: By default, after normalizing, adjusting the variance, and regressing out 
 uninteresting sources of variation, SCTransform will rank the genes by residual 
-variance and output the 3000 most variant genes. If the dataset has larger cell 
+variance and output the 3000 most variant genes. If the data set has larger cell 
 numbers, then it may be beneficial to adjust this parameter higher using the 
 variable.features.n argument. Additionally the last line of output specifies “Set default assay to SCT”. \
 - It is suggested to not regress out batch, and instead use a data integration method like Harmony \
 
 ## PCA
 ```{r run_pca, warning=FALSE, message=FALSE}
-# find variable features
-var.features <- SelectIntegrationFeatures(object.list = mouse.split, 
-                                          nfeatures = 3000)
-
-# merge the mouse
-mouse.merged <- Merge_Seurat_List(mouse.split)
-
-# define the variable features 
-VariableFeatures(mouse.merged) <- var.features
-
 # run PCA on the merged object
-mouse.merged <- RunPCA(object = mouse.merged, assay = "SCT")
-
-# save and cleanup
-saveRDS(mouse.merged, "../../rObjects/merged_sct.rds")
-remove(mouse.split, var.features)
-gc()
-```
-
-```{r read_sct_merged,echo=FALSE,eval=FALSE}
-mouse.merged <- readRDS("../../rObjects/merged_sct.rds")
+mouse.filtered <- RunPCA(object = mouse.filtered, assay = "SCT")
 ```
 
 ```{r plot_pca}
 # Reset idents and levels
-DefaultAssay(mouse.merged) <- "SCT"
-Idents(mouse.merged) <- "sample"
-mouse.merged$sample <- factor(mouse.merged$sample, 
+DefaultAssay(mouse.filtered) <- "SCT"
+Idents(mouse.filtered) <- "sample"
+mouse.filtered$sample <- factor(mouse.filtered$sample, 
                               levels = sample_order)
-mouse.merged$sample2 <- factor(mouse.merged$sample2,
-                               levels = sample_order2)
-mouse.merged$sex <- factor(mouse.merged$sex, 
+mouse.filtered$sex <- factor(mouse.filtered$sex, 
                            levels = sex_order)
-mouse.merged$isoform <- factor(mouse.merged$isoform,
+mouse.filtered$isoform <- factor(mouse.filtered$isoform,
                                levels = isoform_order)
 
 # Plot PCA
-pca1 <- DimPlot(mouse.merged,
+pca1 <- DimPlot(mouse.filtered,
                 reduction = "pca",
-                split.by = "sample2",
-                group.by = "sample2",
-                cols = sample_colors)
+                split.by = "sample",
+                group.by = "sample",
+                cols = sample_colors,
+                ncol = 2)
 pca1
 
-pca2 <- DimPlot(mouse.merged,
+pca2 <- DimPlot(mouse.filtered,
                 reduction = "pca",
                 split.by = "isoform",
                 group.by = "isoform",
                 cols = isoform_colors)
 pca2
 
-pca3 <- DimPlot(mouse.merged,
+pca3 <- DimPlot(mouse.filtered,
                 reduction = "pca",
                 split.by = "sex",
                 group.by = "sex",
                 cols = sex_colors)
 pca3
+
+pca4 <- DimPlot(mouse.filtered,
+                reduction = "pca",
+                group.by = "sample",
+                cols = sample_colors,
+                shuffle = TRUE,
+                raster = FALSE)
+pca4
+
+e1 <- ElbowPlot(mouse.filtered) +
+  geom_vline(xintercept = 15, linetype = "dashed", colour = "red")
+e1
 ```
 
-```{r,echo=FALSE,eval=FALSE,message=FALSE,warning=FALSE}
+
+```{r save_pca,echo=FALSE,eval=FALSE,message=FALSE,warning=FALSE}
 # save pca1
+path <- paste0(out, "clustering_QC/PCA_split_by_sample.pdf")
+pdf(path, width = 10, height = 10)
 pca1
-path <- paste0("../../results/pass_1/all_clusters/clustering_QC/PCA_sample")
-saveToPDF(paste0(path, ".pdf"), width = 10, height = 6)
 dev.off()
 
 # save pca2
-path <- paste0("../../results/pass_1/all_clusters/clustering_QC/PCA_isoform")
+path <- paste0(out, "clustering_QC/PCA_split_by_isoform.pdf")
+pdf(path, width = 6, height = 4)
 pca2
-saveToPDF(paste0(path, ".pdf"), width = 6, height = 6)
 dev.off()
 
 # save pca3
-path <- paste0("../../results/pass_1/all_clusters/clustering_QC/PCA_sex")
+path <- paste0(out, "clustering_QC/PCA_split_by_sex.pdf")
+pdf(path, width = 6, height = 4)
 pca3
-saveToPDF(paste0(path, ".pdf"), width = 6, height = 6)
+dev.off()
+
+# save pca4
+path <- paste0(out, "clustering_QC/PCA_colored_by_sample.pdf")
+pdf(path, width = 6, height = 4)
+pca4
+dev.off()
+
+# save e1
+path <- paste0(out, "clustering_QC/PCA_eblow_plot.pdf")
+pdf(path, width = 6, height = 4)
+e1
 dev.off()
 
 # cleanup
-remove(pca1,pca2,pca3,pca4)
+remove(pca1,pca2,pca3,pca4,e1)
+```
+
+## Harmony
+```{r run_harmony}
+# integrate
+mouse.filtered <- IntegrateLayers(mouse.filtered,
+                                  method = "HarmonyIntegration",
+                                  assay = "SCT",
+                                  orig.reduction = "pca")
+
+# re-join layers
+mouse.filtered[["RNA"]] <- JoinLayers(mouse.filtered[["RNA"]])
+```
+
+```{r plot_harmony}
+hrm1 <- DimPlot(mouse.filtered,
+                reduction = "harmony",
+                split.by = "sample",
+                group.by = "sample",
+                cols = sample_colors,
+                ncol = 2)
+hrm1
+
+hrm2 <- DimPlot(mouse.filtered,
+                reduction = "harmony",
+                split.by = "isoform",
+                group.by = "isoform",
+                cols = isoform_colors)
+hrm2
+
+hrm3 <- DimPlot(mouse.filtered,
+                reduction = "harmony",
+                split.by = "sex",
+                group.by = "sex",
+                cols = sex_colors)
+hrm3
+
+hrm4 <- DimPlot(mouse.filtered,
+                reduction = "harmony",
+                group.by = "sample",
+                cols = sample_colors,
+                shuffle = TRUE,
+                raster = FALSE)
+hrm4
+
+# Plot elbow
+mouse.filtered@reductions$harmony@stdev <-
+  apply(mouse.filtered@reductions$harmony@cell.embeddings, 2, sd)
+e1 <- ElbowPlot(mouse.filtered,
+                reduction = "harmony") +
+  geom_vline(xintercept = 15, linetype = "dashed", color = "red")
+e1
+```
+
+
+```{r save_harmony,echo=FALSE,eval=FALSE,message=FALSE,warning=FALSE}
+# save hrm1
+path <- paste0(out, "clustering_QC/harmony_split_by_sample.pdf")
+pdf(path, width = 10, height = 10)
+hrm1
+dev.off()
+
+# save hrm2
+path <- paste0(out, "clustering_QC/harmony_split_by_isoform.pdf")
+pdf(path, width = 6, height = 4)
+hrm2
+dev.off()
+
+# save hrm3
+path <- paste0(out, "clustering_QC/harmony_split_by_sex.pdf")
+pdf(path, width = 6, height = 4)
+hrm3
+dev.off()
+
+# save hrm4
+path <- paste0(out, "clustering_QC/harmony_colored_by_sample.pdf")
+pdf(path, width = 6, height = 4)
+hrm4
+dev.off()
+
+# save e1
+path <- paste0(out, "clustering_QC/harmony_eblow_plot.pdf")
+pdf(path, width = 6, height = 4)
+e1
+dev.off()
+
+# cleanup
+remove(hrm1,hrm2,hrm3,hrm4,e1)
 ```
 
 ## UMAP
@@ -896,19 +960,16 @@ correlated gene set. Determining how many PCs to include in the clustering step
 is therefore important to ensure that we are capturing the majority of the 
 variation, or cell types, present in our dataset.
 ```{r}
-min.pc <- find_min_pc(mouse.merged, plot = TRUE)
-min.pc
-```
-
-```{r run_UMAP, message=FALSE, warning=FALSE}
-# Run UMAP
-mouse.integrated <- RunUMAP(mouse.merged,
-                           dims = 1:min.pc,
-                           reduction = "pca",
-                           n.components = 3) # set to 3 to use with VR
+# run UMAP
+mouse.filtered <- RunUMAP(mouse.filtered,
+                          dims = 1:15,
+                          reduction = "harmony",
+                          assay = "SCT",
+                          n.components = 3) # set to 3 to use with VR
 
 # plot UMAP
-DimPlot(mouse.integrated,
+DimPlot(mouse.filtered,
+        cols = sample_colors,
         shuffle = TRUE)
 ```
 
@@ -934,15 +995,15 @@ each resolution. \
 
 ```{r find_neighbors, message=FALSE, warning=FALSE}
 # Determine the K-nearest neighbor graph
-mouse.unannotated <- FindNeighbors(object = mouse.integrated,
+mouse.unannotated <- FindNeighbors(object = mouse.filtered,
                                    assay = "SCT", # set as default after SCTransform
-                                   reduction = "pca",
-                                   dims = 1:min.pc)
+                                   reduction = "harmony",
+                                   dims = 1:15)
 
 # Determine the clusters for various resolutions
 mouse.unannotated <- FindClusters(object = mouse.unannotated,
                                   algorithm = 1, # 1 = Louvain
-                                  resolution = seq(0.1,0.8,by=0.1))
+                                  resolution = seq(0.1, 0.5, by=0.1))
 mouse.unannotated$seurat_clusters <- mouse.unannotated$SCT_snn_res.0.5
 ```
 
@@ -972,13 +1033,10 @@ DimPlot(mouse.unannotated,
 DimPlot(mouse.unannotated,
         group.by = "SCT_snn_res.0.5",
         label = TRUE)
-DimPlot(mouse.unannotated,
-        group.by = "SCT_snn_res.0.5",
-        dims = c(2,3),
-        label = TRUE)
 ```
 
-```{r save_final_object,echo=FALSE,eval=TRUE}
+```{r save_final_object,echo=FALSE,eval=FALSE}
 # Save seurat object
 saveRDS(mouse.unannotated, "../../rObjects/pass1_unannotated.rds")
 ```
+
