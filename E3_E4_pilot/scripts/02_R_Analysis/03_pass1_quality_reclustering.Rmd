@@ -1,0 +1,866 @@
+---
+title: "E3/E4 Mice Meningeal Dura scRNAseq"
+subtitle: "Pass 1 Quality Reclustering"
+author: "Kennedi Todd"
+date: "07/29/2024"
+output:
+  html_document:
+    code_folding: hide
+    theme: cerulean
+    toc: true
+    toc_float: true
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Setup
+## Notes
+In the pass1_annotation script there were some that were hard to identify and could potentially be artifact. The goal of this script is to subset the 'tangled' clusters and further inspect.
+
+## Working directory
+```{r working_directory}
+knitr::opts_knit$set(root.dir = ".")
+```
+
+## Libraries
+```{r libraries, message=FALSE, warning=FALSE}
+library(dplyr)        # ungroup()
+library(ggtree)       # BuildClusterTree()
+library(gridExtra)    # grid.arrange()
+library(gtools)       # smartbind()
+library(parallel)     # detectCores()
+library(plotly)       # plot_ly()
+library(Seurat)       # Idents()
+library(ShinyCell)    # createConfig()
+library(tidyr)        # %>%
+```
+
+## Variables and functions
+```{r set_variables_and_thresholds}
+out <- "../../results/pass_1/recluster_group_1/"
+sample_order <- c("E3.M","E3.F","E4.M","E4.F")
+sample_colors <- c("#26946A","#1814A1","#EAC941","#DF5F00")
+sample_order2 <- c("Male E3", "Male E4", "Female E3", "Female E4")
+isoform_order <- c("E4","E3")
+isoform_colors <- c("darkgray","cornflowerblue")
+sex_order <- c("Male","Female")
+sex_colors <- c("darkgray","purple")
+```
+
+## Load data
+```{r read_pass1_all_clusters_annotated}
+mouse.unannotated <- readRDS("../../rObjects/pass1_unannotated.rds")
+Idents(mouse.unannotated) <- "seurat_clusters"
+DefaultAssay(mouse.unannotated) <- "RNA"
+mouse.unannotated <- NormalizeData(mouse.unannotated)
+
+cluster_colors <- c("black","gray40","gray","red1","blue","magenta1","darkorange2",
+                    "darkorange4","yellow1","yellow4","yellow2","green","lightgreen",
+                    "chartreuse1","Aquamarine","cyan","SteelBlue","red4","forestgreen",
+                    "purple1","purple4","orange","plum1","salmon","tan","chocolate4")
+DimPlot(object = mouse.unannotated,
+        reduction = "umap",
+        shuffle = TRUE,
+        repel = TRUE,
+        cols = cluster_colors,
+        label = TRUE)
+```
+
+# Recluster group 1
+Group 1 consists of clusters 0, 2, 3, 4, 8, 9, 11, 13, 16, 19, 21, 25.
+## Subset and recluster
+```{r group1_subset_recluster}
+# subset to group 1
+mouse.unannotated$OG_unannotated_clusters <- mouse.unannotated$seurat_clusters
+myClusters <- c(0, 2, 3, 4, 8, 9, 11, 13, 16, 19, 21, 25)
+keepCells <- mouse.unannotated@meta.data[,"seurat_clusters"] %in% myClusters
+keepCol <- c(4:14,23)
+meta <- mouse.unannotated@meta.data[keepCells,keepCol]
+counts <- LayerData(mouse.unannotated, assay = "RNA", layer = "counts")[,keepCells]
+group1 <- CreateSeuratObject(counts, 
+                             project = "Recluster Group 1", 
+                             meta.data = meta)
+remove(meta)
+
+# filter lowly expressed genes
+counts <- GetAssayData(object = group1, layer = "counts")
+nonzero <- counts > 0  # produces logical
+keep <- Matrix::rowSums(nonzero) >= 10  # sum the true/false
+counts.filtered <- counts[keep,] 
+group1 <- CreateSeuratObject(counts.filtered, meta.data = group1@meta.data)
+
+# overwrite group1
+group1 <- CreateSeuratObject(counts.filtered,
+                             meta.data = group1@meta.data)
+remove(counts,nonzero,keep,counts.filtered)
+
+# sctransform, pca, harmony
+group1[["RNA"]] <- split(group1[["RNA"]], f = group1$sample)
+group1 <- SCTransform(group1, verbose = FALSE)
+group1 <- RunPCA(group1, assay = "SCT")
+group1 <- IntegrateLayers(object = group1,
+                          method = HarmonyIntegration,
+                          orig.reduction = "pca",
+                          assay = "SCT")
+
+# plot harmony
+DimPlot(group1,
+        group.by = "sample",
+        reduction = "harmony",
+        cols = sample_colors,
+        shuffle = TRUE)
+
+# find number of dims to include
+group1@reductions$harmony@stdev <-
+  apply(group1@reductions$harmony@cell.embeddings, 2, sd)
+ElbowPlot(group1,
+          reduction = "harmony") +
+  geom_vline(xintercept = 20, linetype = "dashed", color = "red")
+
+# umap
+group1 <- RunUMAP(group1,
+                  dims = 1:20,
+                  reduction = "harmony",
+                  n.components = 3)
+
+# classification
+group1 <- FindNeighbors(object = group1,
+                        assay = "SCT",
+                        reduction = "harmony",
+                         dims = 1:20)   
+group1 <- FindClusters(object = group1,
+                       algorithm = 1, # 1 = Louvain
+                       resolution = seq(0.1, 0.5,by = 0.1))
+group1$seurat_clusters <- group1$SCT_snn_res.0.1
+
+# cleanup env
+gc()
+```
+
+## Unannotated UMAP
+```{r group1_unannotated_umap}
+DefaultAssay(group1) <- "RNA"
+group1 <- JoinLayers(group1)
+group1 <- NormalizeData(group1)
+Idents(group1) <- "seurat_clusters"
+
+cluster_colors <- c("black","gray","chocolate4","red","gold","green","forestgreen",
+                    "cyan","blue","steelblue","pink","purple","deeppink")
+u1 <- DimPlot(group1,
+              group.by = "seurat_clusters",
+              label = TRUE,
+              cols = cluster_colors)
+u1
+```
+
+```{r save_group1_unannotated_umap, echo=FALSE, eval=FALSE}
+pdf(paste0(out, "UMAP/unannotated_clusters_dim1&2_umap.pdf"), width = 8, height = 6)
+u1
+dev.off()
+
+remove(u1)
+saveRDS(group1, "../../rObjects/pass1_recluster_group1_unannotated.rds")
+```
+
+## Cells per cluster
+```{r group1_cells_per_cluster}
+df <- as.data.frame(table(group1$seurat_clusters))
+colnames(df) <- c("cluster","cell_count")
+write.table(df,
+            file = paste0(out, "clustering_QC/unannotated_cells_per_cluster.tsv"),
+            quote = FALSE,
+            row.names = FALSE,
+            sep = "\t")
+remove(df)
+```
+
+## Feature plots
+```{r group1_feature_plots, message=FALSE, warning=FALSE}
+# UMAP percent.mt
+f1 <- FeaturePlot(group1,
+                  reduction = "umap",
+                  features = "percent.mt") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f1
+
+# UMAP percent.ribo
+f2 <- FeaturePlot(group1,
+                  reduction = "umap",
+                  features = "percent.ribo.protein") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f2
+
+# UMAP percent.hb
+f3 <- FeaturePlot(group1,
+                  reduction = "umap", 
+                  features = "percent.hb") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f3
+
+# UMAP nCount
+f4 <- FeaturePlot(group1,
+                  reduction = "umap", 
+                  features = "nCount_RNA") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f4
+
+# UMAP nFeature
+f5 <- FeaturePlot(group1,
+                  reduction = "umap", 
+                  features = "nFeature_RNA") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f5
+
+# UMAP cell.complexity
+f6 <- FeaturePlot(group1,
+                  reduction = "umap", 
+                  features = "cell.complexity") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f6
+
+# UMAP percent.ribo
+f7 <- FeaturePlot(group1,
+                  reduction = "umap", 
+                  features = "percent.ribo.protein") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f7
+```
+
+```{r save_group1_feature_plots, eval=FALSE, echo=FALSE}
+path <- paste0(out, "clustering_QC/heatmap_")
+pdf(paste0(path, "percent_mito.pdf"), width = 8, height = 6)
+f1
+dev.off()
+
+pdf(paste0(path, "percent_ribo_protein.pdf"), width = 8, height = 6)
+f2
+dev.off()
+
+pdf(paste0(path, "percent_hb.pdf"), width = 8, height = 6)
+f3
+dev.off()
+
+pdf(paste0(path, "nCount.pdf"), width = 8, height = 6)
+f4
+dev.off()
+
+pdf(paste0(path, "nFeature.pdf"), width = 8, height = 6)
+f5
+dev.off()
+
+pdf(paste0(path, "cell_complexity.pdf"), width = 8, height = 6)
+f6
+dev.off()
+
+pdf(paste0(path, "percent_ribo.pdf"), width = 8, height = 6)
+f7
+dev.off()
+
+
+remove(f1,f2,f3,f4,f5,f6,f7)
+```
+
+## Dim plot
+```{r group1_dim_plot}
+d1 <- DimPlot(group1,
+              group.by = "sample",
+              shuffle = TRUE,
+              raster = FALSE,
+              cols = sample_colors)
+d1
+
+d2 <- DimPlot(group1,
+              split.by = "sample",
+              group.by = "seurat_clusters",
+              ncol = 2,
+              cols = cluster_colors,
+              shuffle = TRUE,
+              raster = FALSE)
+d2
+
+d3 <- DimPlot(group1,
+              split.by = "sex",
+              group.by = "seurat_clusters",
+              ncol = 2,
+              cols = cluster_colors,
+              shuffle = TRUE,
+              raster = FALSE)
+d3
+
+d4 <- DimPlot(group1,
+              group.by = "sex",
+              cols = c("green","purple"),
+              shuffle = TRUE,
+              raster = FALSE)
+d4
+
+d5 <- DimPlot(group1,
+              split.by = "isoform",
+              group.by = "seurat_clusters",
+              ncol = 2,
+              cols = cluster_colors,
+              shuffle = TRUE,
+              raster = FALSE)
+d5
+
+d6 <- DimPlot(group1,
+              group.by = "isoform",
+              cols = c("blue","red"),
+              shuffle = TRUE,
+              raster = FALSE)
+d6
+
+d7 <- DimPlot(group1,
+              group.by = "OG_unannotated_clusters",
+              cols = c("black","gray","red","blue","yellow","yellow4","green",
+                       "aquamarine","steelblue","purple","coral","chocolate4"),
+              shuffle = TRUE,
+              raster = FALSE)
+d7
+```
+
+```{r save_group1_dim_plot}
+pdf(paste0(out, "clustering_QC/umap_colored_by_sample.pdf"), width = 8, height = 6)
+d1
+dev.off()
+
+pdf(paste0(out, "clustering_QC/umap_split_by_sample.pdf"), width = 8, height = 6)
+d2
+dev.off()
+
+pdf(paste0(out, "clustering_QC/umap_split_by_sex.pdf"), width = 8, height = 6)
+d3
+dev.off()
+
+pdf(paste0(out, "clustering_QC/umap_colored_by_sex.pdf"), width = 8, height = 6)
+d4
+dev.off()
+
+pdf(paste0(out, "clustering_QC/umap_split_by_isoform.pdf"), width = 8, height = 6)
+d5
+dev.off()
+
+pdf(paste0(out, "clustering_QC/umap_colored_by_isoform.pdf"), width = 8, height = 6)
+d6
+dev.off()
+
+pdf(paste0(out, "clustering_QC/umap_colored_by_OG_pass1_unannotated_clusters.pdf"), width = 8, height = 6)
+d7
+dev.off()
+
+remove(d1,d2,d3,d4,d5,d6,d7)
+```
+
+## Find markers
+```{r group1_auto_find_markers}
+Idents(group1) <- "seurat_clusters"
+markers <- SeuratWrappers::RunPrestoAll(
+  object = group1,
+  assay = "RNA",
+  slot = "counts",
+  only.pos = FALSE
+)
+
+markers <- markers[markers$p_val_adj < 0.01,]
+
+top3 <- Reduce(rbind,
+               by(markers,
+                  markers["cluster"],
+                  head,
+                  n = 3))
+top10 <- Reduce(rbind,
+               by(markers,
+                  markers["cluster"],
+                  head,
+                  n = 10))
+```
+
+```{r save_group1_auto_markers,echo=FALSE,eval=FALSE}
+write.table(markers, 
+            paste0(out, "markers/auto_find_markers_adjpval_0.01.tsv"),
+            quote = FALSE,
+            row.names = FALSE)
+```
+
+## Marker violins
+```{r group1_marker_violins}
+Idents(group1) <- "seurat_clusters"
+group1 <- NormalizeData(group1)
+DefaultAssay(group1) <- "RNA"
+
+v1 <- VlnPlot(group1,
+              group.by = "seurat_clusters",
+              split.by = "seurat_clusters",
+              stack = TRUE,
+              flip = TRUE,
+              cols = cluster_colors,
+              features = top3$gene)
+v1
+
+v2 <- VlnPlot(group1,
+              group.by = "seurat_clusters",
+              split.by = "seurat_clusters",
+              stack = TRUE,
+              flip = TRUE,
+              cols = cluster_colors,
+              features = c("Flt1","Ptprb","C1qa","Mrc1","Col1a1","Col1a2","Notch3",
+                           "Rgs5","Kit","Fcer1a","Cdh19","Kcna1","Prox1","Flt4"))
+v2
+```
+
+```{r save_group1_marker_violins, echo=FALSE, eval=FALSE}
+pdf(paste0(out, "markers/auto_top3_markers_violin_unannotated.pdf"), width = 8, height = 6)
+v1
+dev.off()
+
+pdf(paste0(out, "markers/cluster_markers_violin_unannotated.pdf"), width = 8, height = 6)
+v2
+dev.off()
+```
+
+
+## Assign identities
+```{r assign_group1_idents, eval=FALSE}
+# Rename all identities
+Idents(group1) <- "seurat_clusters"
+group1.annotated <- RenameIdents(object = group1,
+                                "0" = "Ambient RNAs",              # ?
+                                "1" = "BECs",                      # Flt1,Ptprb    
+                                "2" = "Macrophages",               # C1qa,Mrc1       
+                                "3" = "Fibroblasts",               # Col1a1,Col1a2     
+                                "4" = "BECs",                      # Flt1,Ptprb      
+                                "5" = "BECs",                      # Flt1,Ptprb 
+                                "6" = "Pericytes & SMCs",          # Notch3,Rgs5
+                                "7" = "Mast cells?",               # Kit?
+                                "8" = "Doublets",                  # Mpz,Rgs5,C1qa,Col1a1
+                                "9" = "Unknown 1",                 # ?
+                                "10" = "Schwann cells",            # Cdh19,Kcna1
+                                "11" = "LECs",                     # Flt4,Prox1
+                                "12" = "Unknown 2")                # ?
+group1.annotated$annotated_clusters <- Idents(group1)
+Idents(group1.annotated) <- "annotated_clusters"
+```
+
+```{r group1_annotated_umap, eval=FALSE}
+# set colors
+cluster_colors <- c("black","gray","chocolate4","red","gold","green","forestgreen",
+                    "cyan","blue","steelblue","pink","purple","deeppink")
+
+# umap
+umap <- DimPlot(object = group1.annotated, 
+        reduction = "umap",
+        repel = TRUE,
+        group.by = "annotated_clusters",
+        cols = cluster_colors)
+umap
+```
+
+```{r save_group1_annotated_umap, echo=FALSE, eval=FALSE}
+path <- paste0(out, "UMAP/annotated_clusters_dim1&2_umap.pdf")
+pdf(path, width = 8, height = 4)
+umap
+dev.off()
+```
+
+```{r save_group1_annotated_object,echo=FALSE,eval=FALSE}
+# save object
+saveRDS(group1.annotated,"../../rObjects/pass1_recluster_group1_annotated.rds")
+```
+
+# Recluster group 2
+## Subset and recluster
+```{r group2_subset_recluster}
+# change out dir
+out <- "../../results/pass_1/recluster_group_2/"
+# subset to group 2
+myClusters <- c(1,5,6,7,10,17,22,23,24)
+keepCells <- mouse.unannotated@meta.data[,"seurat_clusters"] %in% myClusters
+keepCol <- c(4:14,23)
+meta <- mouse.unannotated@meta.data[keepCells,keepCol]
+counts <- LayerData(mouse.unannotated, assay = "RNA", layer = "counts")[,keepCells]
+group2 <- CreateSeuratObject(counts, 
+                             project = "Recluster Group 2", 
+                             meta.data = meta)
+remove(mouse.unanotated,meta)
+
+# filter lowly expressed genes
+counts <- GetAssayData(object = group2, layer = "counts")
+nonzero <- counts > 0  # produces logical
+keep <- Matrix::rowSums(nonzero) >= 10  # sum the true/false
+counts.filtered <- counts[keep,] 
+group2 <- CreateSeuratObject(counts.filtered, meta.data = group2@meta.data)
+
+# overwrite group2
+group2 <- CreateSeuratObject(counts.filtered,
+                             meta.data = group2@meta.data)
+remove(counts,nonzero,keep,counts.filtered)
+
+# sctransform, pca, harmony
+group2[["RNA"]] <- split(group2[["RNA"]], f = group2$sample)
+group2 <- SCTransform(group2, verbose = FALSE)
+group2 <- RunPCA(group2, assay = "SCT")
+group2 <- IntegrateLayers(object = group2,
+                          method = HarmonyIntegration,
+                          orig.reduction = "pca",
+                          assay = "SCT")
+
+# plot harmony
+DimPlot(group2,
+        group.by = "sample",
+        reduction = "harmony",
+        cols = sample_colors,
+        shuffle = TRUE)
+
+# find number of dims to include
+group2@reductions$harmony@stdev <-
+  apply(group2@reductions$harmony@cell.embeddings, 2, sd)
+ElbowPlot(group2,
+          reduction = "harmony") +
+  geom_vline(xintercept = 20, linetype = "dashed", color = "red")
+
+# umap
+group2 <- RunUMAP(group2,
+                  dims = 1:20,
+                  reduction = "harmony",
+                  assay = "SCT",
+                  n.components = 3)
+
+# classification
+group2 <- FindNeighbors(object = group2,
+                        assay = "SCT",
+                        reduction = "harmony",
+                        dims = 1:20)   
+group2 <- FindClusters(object = group2,
+                       algorithm = 1, # 1 = Louvain
+                       resolution = seq(0.1, 0.5,by = 0.1))
+group2$seurat_clusters <- group2$SCT_snn_res.0.1
+
+# cleanup env
+gc()
+```
+
+## Unannotated UMAP
+```{r group2_unannotated_umap}
+DefaultAssay(group2) <- "RNA"
+group2 <- JoinLayers(group2)
+group2 <- NormalizeData(group2)
+Idents(group2) <- "seurat_clusters"
+
+cluster_colors <- c("blue","red","green","gold","purple","cyan","gray","black")
+u1 <- DimPlot(group2,
+              group.by = "seurat_clusters",
+              label = TRUE,
+              cols = cluster_colors)
+u1
+```
+
+```{r save_group2_unannotated_umap, echo=FALSE, eval=FALSE}
+pdf(paste0(out, "UMAP/unannotated_clusters_dim1&2_umap.pdf"), width = 8, height = 6)
+u1
+dev.off()
+
+remove(u1)
+saveRDS(group2, "../../rObjects/pass1_recluster_group2_unannotated.rds")
+```
+
+## Cells per cluster
+```{r group2_cells_per_cluster}
+df <- as.data.frame(table(group2$seurat_clusters))
+colnames(df) <- c("cluster","cell_count")
+write.table(df,
+            file = paste0(out, "clustering_QC/unannotated_cells_per_cluster.tsv"),
+            quote = FALSE,
+            row.names = FALSE,
+            sep = "\t")
+remove(df)
+```
+
+## Feature plots
+```{r group2_feature_plots_unannotated, message=FALSE, warning=FALSE}
+# UMAP percent.mt
+f1 <- FeaturePlot(group2,
+                  reduction = "umap",
+                  features = "percent.mt") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f1
+
+# UMAP percent.ribo
+f2 <- FeaturePlot(group2,
+                  reduction = "umap",
+                  features = "percent.ribo.protein") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f2
+
+# UMAP percent.hb
+f3 <- FeaturePlot(group2,
+                  reduction = "umap", 
+                  features = "percent.hb") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f3
+
+# UMAP nCount
+f4 <- FeaturePlot(group2,
+                  reduction = "umap", 
+                  features = "nCount_RNA") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f4
+
+# UMAP nFeature
+f5 <- FeaturePlot(group2,
+                  reduction = "umap", 
+                  features = "nFeature_RNA") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f5
+
+# UMAP cell.complexity
+f6 <- FeaturePlot(group2,
+                  reduction = "umap", 
+                  features = "cell.complexity") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f6
+
+# UMAP percent.ribo
+f7 <- FeaturePlot(group2,
+                  reduction = "umap", 
+                  features = "percent.ribo.protein") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f7
+```
+
+```{r save_group2_feature_plots, eval=FALSE, echo=FALSE}
+path <- paste0(out, "clustering_QC/heatmap_")
+pdf(paste0(path, "percent_mito.pdf"), width = 8, height = 6)
+f1
+dev.off()
+
+pdf(paste0(path, "percent_ribo_protein.pdf"), width = 8, height = 6)
+f2
+dev.off()
+
+pdf(paste0(path, "percent_hb.pdf"), width = 8, height = 6)
+f3
+dev.off()
+
+pdf(paste0(path, "nCount.pdf"), width = 8, height = 6)
+f4
+dev.off()
+
+pdf(paste0(path, "nFeature.pdf"), width = 8, height = 6)
+f5
+dev.off()
+
+pdf(paste0(path, "cell_complexity.pdf"), width = 8, height = 6)
+f6
+dev.off()
+
+pdf(paste0(path, "percent_ribo.pdf"), width = 8, height = 6)
+f7
+dev.off()
+
+
+remove(f1,f2,f3,f4,f5,f6,f7)
+```
+
+## Dim plot
+```{r group2_dim_plot}
+d1 <- DimPlot(group2,
+              group.by = "sample",
+              shuffle = TRUE,
+              raster = FALSE,
+              cols = sample_colors)
+d1
+
+d2 <- DimPlot(group2,
+              split.by = "sample",
+              group.by = "seurat_clusters",
+              ncol = 2,
+              cols = cluster_colors,
+              shuffle = TRUE,
+              raster = FALSE)
+d2
+
+d3 <- DimPlot(group2,
+              split.by = "sex",
+              group.by = "seurat_clusters",
+              ncol = 2,
+              cols = cluster_colors,
+              shuffle = TRUE,
+              raster = FALSE)
+d3
+
+d4 <- DimPlot(group2,
+              group.by = "sex",
+              cols = c("green","purple"),
+              shuffle = TRUE,
+              raster = FALSE)
+d4
+
+d5 <- DimPlot(group2,
+              split.by = "isoform",
+              group.by = "seurat_clusters",
+              ncol = 2,
+              cols = cluster_colors,
+              shuffle = TRUE,
+              raster = FALSE)
+d5
+
+d6 <- DimPlot(group2,
+              group.by = "isoform",
+              cols = c("blue","red"),
+              shuffle = TRUE,
+              raster = FALSE)
+d6
+
+d7 <- DimPlot(group2,
+              group.by = "OG_unannotated_clusters",
+              cols = c("gray40","deeppink","orange2","chocolate4","yellow3",
+                       "red4","pink","coral","burlywood3"),
+              shuffle = TRUE,
+              raster = FALSE)
+d7
+```
+
+```{r save_group2_dim_plot}
+pdf(paste0(out, "clustering_QC/umap_colored_by_sample.pdf"), width = 8, height = 6)
+d1
+dev.off()
+
+pdf(paste0(out, "clustering_QC/umap_split_by_sample.pdf"), width = 8, height = 6)
+d2
+dev.off()
+
+pdf(paste0(out, "clustering_QC/umap_split_by_sex.pdf"), width = 8, height = 6)
+d3
+dev.off()
+
+pdf(paste0(out, "clustering_QC/umap_colored_by_sex.pdf"), width = 8, height = 6)
+d4
+dev.off()
+
+pdf(paste0(out, "clustering_QC/umap_split_by_isoform.pdf"), width = 8, height = 6)
+d5
+dev.off()
+
+pdf(paste0(out, "clustering_QC/umap_colored_by_isoform.pdf"), width = 8, height = 6)
+d6
+dev.off()
+
+pdf(paste0(out, "clustering_QC/umap_colored_by_OG_pass1_unannotated_clusters.pdf"), width = 8, height = 6)
+d7
+dev.off()
+
+remove(d1,d2,d3,d4,d5,d6,d7)
+```
+
+## Find markers
+```{r group2_auto_find_markers}
+Idents(group2) <- "seurat_clusters"
+markers <- SeuratWrappers::RunPrestoAll(
+  object = group2,
+  assay = "RNA",
+  slot = "counts",
+  only.pos = FALSE
+)
+
+markers <- markers[markers$p_val_adj < 0.01,]
+
+top3 <- Reduce(rbind,
+               by(markers,
+                  markers["cluster"],
+                  head,
+                  n = 3))
+top10 <- Reduce(rbind,
+               by(markers,
+                  markers["cluster"],
+                  head,
+                  n = 10))
+```
+
+```{r save_group2_auto_markers,echo=FALSE,eval=FALSE}
+write.table(markers, 
+            paste0(out, "markers/auto_find_markers_adjpval_0.01.tsv"),
+            quote = FALSE,
+            row.names = FALSE)
+```
+
+## Marker violins
+```{r group2_marker_violins}
+Idents(group2) <- "seurat_clusters"
+group2 <- NormalizeData(group2)
+DefaultAssay(group2) <- "RNA"
+
+v1 <- VlnPlot(group2,
+              group.by = "seurat_clusters",
+              split.by = "seurat_clusters",
+              stack = TRUE,
+              flip = TRUE,
+              cols = cluster_colors,
+              features = top3$gene)
+v1
+
+v2 <- VlnPlot(group2,
+              group.by = "seurat_clusters",
+              split.by = "seurat_clusters",
+              stack = TRUE,
+              flip = TRUE,
+              cols = cluster_colors,
+              features = c("C1qa","Ms4a7","Nkg7","Cd3e","Trac","Il23r","Ms4a1",
+                           "Fcrla","Fgr","Flt1","Flt3"))
+v2
+```
+
+```{r save_group2_marker_violins}
+pdf(paste0(out, "markers/auto_top3_markers_violin_unannotated.pdf"), width = 8, height = 6)
+v1
+dev.off()
+
+pdf(paste0(out, "markers/cluster_markers_violin_unannotated.pdf"), width = 8, height = 6)
+v2
+dev.off()
+```
+
+
+## Assign identities
+```{r assign_group2_idents}
+# Rename all identities
+Idents(group2) <- "seurat_clusters"
+group2.annotated <- RenameIdents(object = group2,
+                                "0" = "Macrophages",    # C1qa,Ms4a7
+                                "1" = "T cells",        # Cd3e,Trac  
+                                "2" = "B cells",        # Ms4a1,Fcrla     
+                                "3" = "Monocytes?",     # Fgr   
+                                "4" = "B cells?",       # Fcrla      
+                                "5" = "T cells",        # Cd3e
+                                "6" = "Contaminating endothelial",    # Flt1
+                                "7" = "DCs")            # Flt3
+group2.annotated$annotated_clusters <- Idents(group2)
+Idents(group2.annotated) <- "annotated_clusters"
+```
+
+```{r group2_annotated_umap}
+# set colors
+cluster_colors <- c("black","gray","chocolate4","red","gold","green","forestgreen",
+                    "cyan","blue","steelblue","pink","purple","deeppink")
+
+# umap
+umap <- DimPlot(object = group2.annotated, 
+        reduction = "umap",
+        repel = TRUE,
+        group.by = "annotated_clusters",
+        cols = cluster_colors)
+umap
+```
+
+```{r save_group2_annotated_umap, echo=FALSE, eval=FALSE}
+path <- paste0(out, "UMAP/annotated_clusters_dim1&2_umap.pdf")
+pdf(path, width = 8, height = 4)
+umap
+dev.off()
+```
+
+```{r save_group2_annotated_object,echo=FALSE,eval=FALSE}
+# save object
+saveRDS(group2.annotated,"../../rObjects/pass1_recluster_group2_annotated.rds")
+```
+
+

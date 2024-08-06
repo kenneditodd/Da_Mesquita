@@ -1,0 +1,524 @@
+---
+title: "Mouse Meningeal Dura scRNAseq"
+subtitle: "Pass 2 Reclustering"
+author: "Kennedi Todd"
+date: "04/19/2023"
+output:
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_float: true
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Setup
+## Working directory
+```{r working_directory}
+knitr::opts_knit$set(root.dir = ".")
+```
+
+## Libraries
+```{r libraries, message=FALSE, warning=FALSE}
+# load packages
+library(dplyr)        # ungroup()
+library(ggtree)       # BuildClusterTree()
+library(gridExtra)    # grid.arrange()
+library(gtools)       # smartbind()
+library(parallel)     # detectCores()
+library(plotly)       # plot_ly()
+library(Seurat)       # Idents()
+library(ShinyCell)    # createConfig()
+library(tidyr)        # %>%
+
+# work in parallel
+options(mc.cores = detectCores() - 1)
+```
+
+## Variables and functions
+```{r set_variables_and_thresholds}
+# variables
+sample_order <- c("E3.M","E3.F","E4.M","E4.F")
+sample_colors <- c("#26946A","#1814A1","#EAC941","#DF5F00")
+sample_order2 <- c("Male E3", "Male E4", "Female E3", "Female E4")
+isoform_order <- c("E4","E3")
+isoform_colors <- c("darkgray","cornflowerblue")
+sex_order <- c("Male","Female")
+sex_colors <- c("darkgray","purple")
+
+# single cell functions
+source("../../refs/Kennedi_single_cell_functions.R")
+```
+
+## Load data
+```{r read_pass1_all_clusters_annotated}
+mouse.annotated <- readRDS("../../rObjects/pass2_annotated.rds")
+Idents(mouse.annotated) <- "annotated_clusters"
+DefaultAssay(mouse.annotated) <- "RNA"
+
+cluster_colors <- c("chocolate4","tan","gray40","red1","darkorange2","gold","green",
+                    "forestgreen","cyan","steelblue","blue","purple2","magenta",
+                    "pink")
+
+DimPlot(object = mouse.annotated,
+        reduction = "umap",
+        shuffle = TRUE,
+        raster = FALSE,
+        group.by = "annotated_clusters",
+        cols = cluster_colors)
+```
+
+# Endothelial Recluster
+## Recluster
+```{r subset_recluster_endothelial, eval=FALSE}
+endothelial <- subset_recluster(obj = mouse.annotated,
+                                cellIdent = "annotated_clusters",
+                                cellType = "Endothelial cells",
+                                projectID = "Endothelial Recluster",
+                                keepCol = c(4,8,5:7,9:14))
+    
+saveRDS(endothelial, "../../rObjects/pass2_endothelial_recluster_unannotated.rds")
+```
+
+```{r load_reclustered_endothelial, echo=FALSE, eval=TRUE}
+endothelial <- readRDS("../../rObjects/pass2_endothelial_recluster_unannotated.rds")
+```
+
+## Unannotated UMAP
+```{r endothelial_unannotated_umap}
+Idents(endothelial) <- "seurat_clusters"
+cluster_colors <- c("chocolate4","tan","firebrick1","gold","green","forestgreen",
+                    "cyan","blue","purple2","magenta","pink")
+
+u1 <- DimPlot(endothelial,
+              label = TRUE,
+              raster = FALSE,
+              shuffle = TRUE,
+              cols = cluster_colors,
+              reduction = "umap")
+u1
+
+u2 <- DimPlot(endothelial,
+              label = TRUE,
+              dims = c(2,3),
+              raster = FALSE,
+              shuffle = TRUE,
+              cols = cluster_colors,
+              reduction = "umap")
+u2
+```
+
+```{r save_endothelial_unannotated_umap, eval=FALSE, echo=FALSE}
+path <- "../../results/pass_2/endothelial/UMAP/unannotated_clusters.pdf"
+pdf(path, height = 4, width = 6)
+u1
+dev.off()
+remove(u1,u2)
+```
+
+## Potential markers
+```{r find_endothelial_markers, eval=FALSE}
+all.markers <- find_cluster_markers(obj = endothelial,
+                                    cellIdent = "seurat_clusters")
+saveRDS(all.markers, 
+        "../../rObjects/pass2_endothelial_recluster_unannotated_cluster_markers.rds")
+
+all.markers <- subset(all.markers, p_val_adj < 0.01)
+path <- "../../results/pass_2/endothelial/markers/"
+write.table(all.markers,
+            paste0(path,"unannotated_cluster_markers_adjpval_0.01.tsv"),
+            quote = FALSE, row.names = FALSE, sep = "\t")
+```
+
+```{r unannotated_endothelial_markers}
+all.markers <- readRDS(
+  "../../rObjects/pass2_endothelial_recluster_unannotated_cluster_markers.rds")
+all.markers <- subset(all.markers, p_val_adj < 0.01)
+
+top3 <- Reduce(rbind,
+                by(all.markers,
+                   all.markers["cluster"],
+                   head,
+                   n = 3))
+
+v1 <- VlnPlot(endothelial,
+             features = top3$gene,
+             flip = TRUE,
+             stack = TRUE,
+             cols = cluster_colors,
+             split.by = "seurat_clusters") +
+  theme(axis.text.x = element_text(angle = 90,vjust = 0.5, hjust=1))
+v1
+```
+
+```{r save_unannotated_endothelial_markers, eval=FALSE, echo=FALSE}
+path <- "../../results/pass_2/endothelial/markers/unannotated_top3_markers_per_cluster_violin.pdf"
+pdf(path, height = 8, width = 8)
+v1
+dev.off()
+remove(v1)
+```
+
+## Assign identities
+```{r assign_endothelial_identities}
+endothelial <- RenameIdents(object = endothelial,
+                            "0" = "Kdr-high BECs",
+                            "1" = "H2-Eb1-high BECs",
+                            "2" = "Vwf-high BECs",
+                            "3" = "Kdr-high BECs",
+                            "4" = "Vegfc-high BECs",
+                            "5" = "H2-Eb1-high BECs",
+                            "6" = "Cldn5-high BECs",
+                            "7" = "Vwf-high BECs",
+                            "8" = "LECs",
+                            "9" = "Contaminating macrophages", 
+                            "10" = "Cldn5-high BECs")
+endothelial$annotated_clusters <- factor(Idents(endothelial),
+                                         levels = c("Vwf-high BECs",
+                                                    "Kdr-high BECs",
+                                                    "Cldn5-high BECs",
+                                                    "H2-Eb1-high BECs",
+                                                    "Vegfc-high BECs",
+                                                    "LECs",
+                                                    "Contaminating macrophages"))
+Idents(endothelial) <- "annotated_clusters"
+```
+
+## Annotated UMAP
+```{r endothelial_annotated_umap}
+cluster_colors <- c("gray","firebrick1","gold","chartreuse3","cyan","blue",
+                    "magenta")
+
+u1 <- DimPlot(endothelial,
+              raster = FALSE,
+              shuffle = TRUE,
+              cols = cluster_colors,
+              reduction = "umap")
+u1
+
+u2 <- DimPlot(endothelial,
+              dims = c(2,3),
+              raster = FALSE,
+              shuffle = TRUE,
+              cols = cluster_colors,
+              reduction = "umap")
+u2
+```
+
+```{r save_endothelial_unannotated_umap, eval=FALSE, echo=FALSE}
+path <- "../../results/pass_2/endothelial/UMAP/annotated_clusters.pdf"
+pdf(path, height = 4, width = 8)
+u1
+dev.off()
+
+```
+
+## Markers
+```{r annotated_endothelial_markers}
+Idents(endothelial) <- "annotated_clusters"
+goi <- c("Pecam1","Vwf","Cfh","Kdr","Ifitm3","Cldn5","H2-Eb1","Vegfc","Prox1",
+         "Flt4","Ccl21a","Mrc1","Ptprc","Lyz2")
+
+d1 <- DotPlot(endothelial,
+              features = goi) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+d1
+
+v1 <- VlnPlot(endothelial,
+             features = goi,
+             flip = TRUE,
+             stack = TRUE,
+             cols = cluster_colors,
+             split.by = "annotated_clusters") +
+  theme(axis.text.x = element_text(angle = 90,vjust = 0.5, hjust=1))
+v1
+```
+
+```{r save_annotated_endothelial_markers, eval=FALSE, echo=FALSE}
+path <- "../../results/pass_2/endothelial/markers/"
+pdf(paste0(path,"annotated_cluster_markers_dot_plot.pdf"), height = 6, width = 8)
+d1
+dev.off()
+
+pdf(paste0(path,"annotated_cluster_markers_violin.pdf"), height = 6, width = 8)
+v1
+dev.off()
+```
+
+## Feature plots
+```{r endothelial_feature_plot,eval=FALSE}
+f1 <- FeaturePlot(endothelial,
+            features = "nCount_RNA")  + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f1
+
+f2 <- FeaturePlot(endothelial,
+            features = "nFeature_RNA")  + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f2
+```
+
+```{r save_endothelial_feature_plot, eval=FALSE, echo=FALSE}
+path <- "../../results/pass_2/endothelial/clustering_QC/"
+pdf(paste0(path,"nCount.pdf"), height = 4, width = 6)
+f1
+dev.off()
+
+pdf(paste0(path,"nFeature.pdf"), height = 4, width = 6)
+f2
+dev.off()
+```
+
+```{r eval=FALSE, echo=FALSE}
+saveRDS(endothelial,"../../rObjects/pass2_endothelial_recluster_annotated.rds")
+```
+
+## Shiny app
+```{r cleanup_obj,eval=FALSE}
+shiny.endothelial <- endothelial
+shiny.endothelial@assays$RNA@var.features <- 
+  shiny.endothelial@assays$SCT@var.features
+metadata <- shiny.endothelial@meta.data
+metadata <- metadata[,c(22,23,2:14)]
+colnames(metadata)[1] <- "unannotated_clusters"
+shiny.endothelial@meta.data <- metadata
+shiny.endothelial@assays$SCT@meta.features <- metadata
+shiny.endothelial@assays$RNA@meta.features <- metadata
+```
+
+```{r output_shiny_folder, eval=FALSE}
+# make shiny folder
+DefaultAssay(shiny.endothelial) <- "RNA"
+Idents(shiny.endothelial) <- shiny.endothelial$annotated_clusters
+sc.config <- createConfig(shiny.endothelial)
+setwd("../../results/pass_2/endothelial")
+makeShinyApp(shiny.endothelial, sc.config, gene.mapping = TRUE,
+             shiny.title = "Pass 2: Endothelial Recluster") 
+```
+
+# Macrophages & Monocytes Recluster
+## Recluster
+```{r subset_recluster_macrophages, eval=FALSE}
+macrophages <- subset_recluster(obj = mouse.annotated,
+                                cellIdent = "annotated_clusters",
+                                cellType = c("Macrophages","Monocytes"),
+                                projectID = "Macrophages & Monocytes Recluster",
+                                keepCol = c(4,8,5:7,9:14))
+    
+saveRDS(macrophages, "../../rObjects/pass2_macrophages_monocytes_recluster_unannotated.rds")
+```
+
+```{r load_reclustered_macrophages, echo=FALSE, eval=TRUE}
+macrophages <- readRDS("../../rObjects/pass2_macrophages_monocytes_recluster_unannotated.rds")
+```
+
+## Unannotated UMAP
+```{r macrophages_unannotated_umap}
+Idents(macrophages) <- "seurat_clusters"
+cluster_colors <- c("chocolate4","tan","firebrick1","gold","green","forestgreen",
+                    "cyan","blue","purple2","magenta","pink")
+
+u1 <- DimPlot(macrophages,
+              label = TRUE,
+              raster = FALSE,
+              shuffle = TRUE,
+              cols = cluster_colors,
+              reduction = "umap")
+u1
+
+u2 <- DimPlot(macrophages,
+              dims = c(2,3),
+              label = TRUE,
+              raster = FALSE,
+              shuffle = TRUE,
+              cols = cluster_colors,
+              reduction = "umap")
+u2
+```
+
+```{r save_macrophages_unannotated_umap, eval=FALSE, echo=FALSE}
+path <- "../../results/pass_2/macrophages_monocytes/UMAP/unannotated_clusters.pdf"
+pdf(path, height = 4, width = 6)
+u1
+dev.off()
+remove(u1,u2)
+```
+
+## Potential markers
+```{r find_macrophages_markers, eval=FALSE}
+all.markers <- find_cluster_markers(obj = macrophages,
+                                    cellIdent = "seurat_clusters")
+saveRDS(all.markers, 
+        "../../rObjects/pass2_macrophages_recluster_unannotated_cluster_markers.rds")
+
+all.markers <- subset(all.markers, p_val_adj < 0.01)
+path <- "../../results/pass_2/macrophages/markers/"
+write.table(all.markers,
+            paste0(path,"unannotated_cluster_markers_adjpval_0.01.tsv"),
+            quote = FALSE, row.names = FALSE, sep = "\t")
+```
+
+```{r unannotated_macrophages_markers}
+all.markers <- readRDS(
+  "../../rObjects/pass2_macrophages_monocytes_recluster_unannotated_cluster_markers.rds")
+all.markers <- subset(all.markers, p_val_adj < 0.01)
+
+top3 <- Reduce(rbind,
+                by(all.markers,
+                   all.markers["cluster"],
+                   head,
+                   n = 3))
+
+v1 <- VlnPlot(macrophages,
+             features = top3$gene,
+             flip = TRUE,
+             stack = TRUE,
+             cols = cluster_colors,
+             split.by = "seurat_clusters") +
+  theme(axis.text.x = element_text(angle = 90,vjust = 0.5, hjust=1))
+v1
+```
+
+```{r save_unannotated_macrophages_markers, eval=FALSE, echo=FALSE}
+path <- "../../results/pass_2/macrophages_monocytes/markers/unannotated_top3_markers_per_cluster_violin.pdf"
+pdf(path, height = 8, width = 8)
+v1
+dev.off()
+remove(v1)
+```
+
+## Assign identities
+```{r assign_macrophages_identities}
+macrophages <- RenameIdents(object = macrophages,
+                            "0" = "H2-Eb1-high Tyrobp-high macrophages",
+                            "1" = "H2-Eb1-high Ccr2-high macrophages",
+                            "2" = "H2-Eb1-low macrophages",
+                            "3" = "H2-Eb1-high Ccr2-high macrophages",
+                            "4" = "H2-Eb1-low macrophages",
+                            "5" = "H2-Eb1-low macrophages",
+                            "6" = "Monocytes",
+                            "7" = "H2-Eb1-low macrophages",
+                            "8" = "Contaminating BECs",
+                            "9" = "Mki67-high Tfrc-high monocytes", 
+                            "10" = "H2-Eb1-low macrophages")
+macrophages$annotated_clusters <- factor(Idents(macrophages),
+                                         levels = c("Mki67-high Tfrc-high monocytes",
+                                                    "Monocytes",
+                                                    "H2-Eb1-low macrophages",
+                                                    "H2-Eb1-high Ccr2-high macrophages",
+                                                    "H2-Eb1-high Tyrobp-high macrophages",
+                                                    "Contaminating BECs"))
+Idents(macrophages) <- "annotated_clusters"
+```
+
+## Annotated UMAP
+```{r macrophages_annotated_umap}
+cluster_colors <- c("firebrick1","gold","chartreuse3","cyan","blue","magenta")
+
+u1 <- DimPlot(macrophages,
+              raster = FALSE,
+              shuffle = TRUE,
+              cols = cluster_colors,
+              reduction = "umap")
+u1
+
+u2 <- DimPlot(macrophages,
+              dims = c(2,3),
+              raster = FALSE,
+              shuffle = TRUE,
+              cols = cluster_colors,
+              reduction = "umap")
+u2
+```
+
+```{r save_macrophages_unannotated_umap, eval=FALSE, echo=FALSE}
+path <- "../../results/pass_2/macrophages_monocytes/UMAP/annotated_clusters.pdf"
+pdf(path, height = 4, width = 8)
+u1
+dev.off()
+```
+
+## Markers
+```{r annotated_macrophages_markers}
+Idents(macrophages) <- "annotated_clusters"
+goi <- c("Tfrc","Mki67","Ly6c2","Ccr2","Lyz2","Mrc1","H2-Eb1","H2-Aa","Tyrobp",
+         "Selenop","Ifitm3","Apoe","Pecam1","Vwf","Cdh5")
+
+d1 <- DotPlot(macrophages,
+              features = goi) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+d1
+
+v1 <- VlnPlot(macrophages,
+             features = goi,
+             flip = TRUE,
+             stack = TRUE,
+             cols = cluster_colors,
+             split.by = "annotated_clusters") +
+  theme(axis.text.x = element_text(angle = 90,vjust = 0.5, hjust=1))
+v1
+```
+
+```{r save_annotated_macrophages_markers, eval=FALSE, echo=FALSE}
+path <- "../../results/pass_2/macrophages_monocytes/markers/"
+
+pdf(paste0(path,"annotated_cluster_markers_dot_plot.pdf"), height = 6, width = 9)
+d1
+dev.off()
+
+pdf(paste0(path,"annotated_cluster_markers_violin.pdf"), height = 8, width = 8)
+v1
+dev.off()
+```
+
+## Feature plots
+```{r macrophages_feature_plot,eval=FALSE}
+f1 <- FeaturePlot(macrophages,
+            features = "nCount_RNA")  + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f1
+
+f2 <- FeaturePlot(macrophages,
+            features = "nFeature_RNA")  + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f2
+```
+
+```{r save_macrophages_feature_plot, eval=FALSE, echo=FALSE}
+path <- "../../results/pass_2/macrophages_monocytes/clustering_QC/"
+pdf(paste0(path,"nCount.pdf"), height = 4, width = 6)
+f1
+dev.off()
+
+pdf(paste0(path,"nFeature.pdf"), height = 4, width = 6)
+f2
+dev.off()
+```
+```{r}
+saveRDS(macrophages,
+        "../../rObjects/pass2_macrophages_monocytes_recluster_annotated.rds")
+```
+
+## Shiny app
+```{r cleanup_obj,eval=FALSE}
+shiny.macrophages <- macrophages
+shiny.macrophages@assays$RNA@var.features <- 
+  shiny.macrophages@assays$SCT@var.features
+metadata <- shiny.macrophages@meta.data
+metadata <- metadata[,c(22,23,2:14)]
+colnames(metadata)[1] <- "unannotated_clusters"
+shiny.macrophages@meta.data <- metadata
+shiny.macrophages@assays$SCT@meta.features <- metadata
+shiny.macrophages@assays$RNA@meta.features <- metadata
+```
+
+```{r output_shiny_folder, eval=FALSE}
+# make shiny folder
+DefaultAssay(shiny.macrophages) <- "RNA"
+Idents(shiny.macrophages) <- shiny.macrophages$annotated_clusters
+sc.config <- createConfig(shiny.macrophages)
+setwd("../../results/pass_2/macrophages_monocytes")
+makeShinyApp(shiny.macrophages, sc.config, gene.mapping = TRUE,
+             shiny.title = "Pass 2: Macrophages & Monocytes Recluster") 
+```
+
