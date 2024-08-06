@@ -18,3 +18,6 @@ E3_E4_pilot/refs/test_functions.R
 E3_E4_pilot/results
 E3_E4_pilot/rObjects
 E3_E4_pilot/scripts/*/logs
+E3_E4_pilot/scripts/*/old
+E3_E4_pilot/scripts/*/old_backup
+E3_E4_pilot/scripts/*/rsconnect

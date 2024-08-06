@@ -1,6 +1,6 @@
 ---
 title: "PLX5622 Diet Mice scRNAseq"
-subtitle: "All Clusters Pass 1 QC and DE"
+subtitle: "All Clusters Pass 1, Downsampled, QC and DE"
 author: "Kennedi Todd"
 date: "06/26/2024"
 output:
@@ -20,8 +20,7 @@ knitr::opts_knit$set(root.dir = ".")
 
 ## Libraries
 ```{r libraries, message=FALSE, warning=FALSE}
-# load packages
-library(ComplexUpset) 
+library(ComplexUpset) # 
 library(dplyr)        # ungroup()
 library(ggrepel)      # geom_text_repel()
 library(ggtree)       # BuildClusterTree()
@@ -30,12 +29,9 @@ library(gtools)       # smartbind()
 library(parallel)     # detectCores()
 library(plotly)       # plot_ly()
 library(Seurat)       # DimPlot()
-library(ShinyCell)
+library(ShinyCell)    # createConfig()
 library(tidyr)        # %>%
 library(UpSetR)       # fromList()
-
-# work in parallel
-options(mc.cores = detectCores() - 1)
 ```
 
 ## Variables and functions
@@ -59,15 +55,6 @@ sex_order <- c("Male","Female")
 sex_colors <- c("green","purple")
 diet_order <- c("control","PLX5622")
 diet_color <- c("coral","cyan")
-
-# single cell functions
-source("../../../functions/Kennedi_single_cell_functions_v5.R")
-
-# save function
-saveToPDF <- function(...) {
-    d = dev.copy(pdf,...)
-    dev.off(d)
-}
 ```
 
 ## Load data
@@ -76,7 +63,7 @@ mouse.annotated <- readRDS("../../rObjects/pass1_annotated.rds")
 ```
 
 # Downsample
-```{r}
+```{r downsample}
 # check cells per sample
 table(mouse.annotated$sample)
 
@@ -84,8 +71,8 @@ table(mouse.annotated$sample)
 Idents(mouse.annotated) <- "sample"
 mouse.downsample <- subset(x = mouse.annotated, downsample = 2000)
 table(mouse.downsample$sample)
-saveRDS(mouse.downsample, "../../rObjects/pass1_annotated_downsampled.rds")
-mouse.downsample <- readRDS("../../rObjects/pass1_annotated_downsampled.rds")
+#saveRDS(mouse.downsample, "../../rObjects/pass1_annotated_downsampled.rds")
+#mouse.downsample <- readRDS("../../rObjects/pass1_annotated_downsampled.rds")
 remove(mouse.annotated)
 ```
 
@@ -1377,10 +1364,9 @@ setwd("../../results/all_clusters_pass1/downsampled")
 makeShinyApp(obj = shiny.obj, 
              scConf = sc.config, 
              gene.mapping = TRUE,
-             shiny.title = "All Clusters Pass 1")
+             shiny.title = "All Clusters")
 
 # manual config edits
-setwd("../../results/all_clusters_pass1/downsampled")
 sc1conf <- readRDS("shinyApp/sc1conf.rds")
 cluster_hex <- "#B5B9BA|#3385BB|#40BBFF|#84BF96|#7F9D55|#F57C7C|#E42622|#FBB268|#FE8D19|#DE9E83|#A6CEE3|#9D7BBA|#977899"
 sc1conf[2,4] <- cluster_hex
