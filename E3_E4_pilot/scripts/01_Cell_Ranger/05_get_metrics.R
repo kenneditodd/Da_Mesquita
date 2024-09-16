@@ -1,18 +1,25 @@
 # load libraries
 library(stringr)
+library(dotenv)
+
+# load the environment variables
+load_dot_env(file = "../../refs/.env")  # Adjust the path to your .env file
+
+# access the environment variables
+counts_dir <- Sys.getenv("COUNTS_DIR")
 
 # file locations
-locations <- c("/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/E3_2M_F/outs/metrics_summary.csv",
-               "/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/E3_2M_M/outs/metrics_summary.csv",
-               "/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/E3_14M_F/outs/metrics_summary.csv",
-               "/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/E3_14M_M/outs/metrics_summary.csv",
-               "/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/E4_2M_F/outs/metrics_summary.csv",
-               "/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/E4_2M_M/outs/metrics_summary.csv",
-               "/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/E4_14M_F/outs/metrics_summary.csv",
-               "/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/E4_14M_M/outs/metrics_summary.csv")
+locations <- c(paste0(counts_dir, "/E3_2M_F/outs/metrics_summary.csv"),
+               paste0(counts_dir, "/E3_2M_M/outs/metrics_summary.csv"),
+               paste0(counts_dir, "/E3_14M_F/outs/metrics_summary.csv"),
+               paste0(counts_dir, "/E3_14M_M/outs/metrics_summary.csv"),
+               paste0(counts_dir, "/E4_2M_F/outs/metrics_summary.csv"),
+               paste0(counts_dir, "/E4_2M_M/outs/metrics_summary.csv"),
+               paste0(counts_dir, "/E4_14M_F/outs/metrics_summary.csv"),
+               paste0(counts_dir, "/E4_14M_M/outs/metrics_summary.csv"))
 
 # sample names
-names <- str_match(locations, "/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/(.+)/outs/metrics_summary.csv")[,2]
+names <- str_match(locations, ".+/counts/(.+)/outs/metrics_summary.csv")[,2]
 
 # initialize df and loop through files
 df <- data.frame()
@@ -32,11 +39,9 @@ c.names <- c("estimated_cells", "mean_reads", "median_genes", "number_reads",
                   "confident_intergenic_reads_mapped", "confident_intronic_reads_mapped",
                   "confident_exonic_reads_mapped", "confident_reads_mapped_transcriptome",
                   "reads_mapped_antisense", "fraction_reads", "total_genes", "median_UMI")
-colnames(df) <- c.names
+colnames(df) <- tolower(gsub("\\.", "_", colnames(df)))
 
 write.table(df, 
-            "/research/labs/neurology/fryer/m214960/Da_Mesquita/E3_E4_pilot/counts/web_summaries/overall_metrics.tsv",
+            paste0(counts_dir, "/web_summaries/overall_metrics.tsv"),
             sep = "\t",
             quote = FALSE)
-
-
