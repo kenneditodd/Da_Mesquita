@@ -2,10 +2,9 @@
 title: "E3/E4 Mice Meningeal Dura scRNAseq"
 subtitle: "Pass 1 Quality Reclustering"
 author: "Kennedi Todd"
-date: "07/29/2024"
+date: "09/16/2024"
 output:
   html_document:
-    code_folding: hide
     theme: cerulean
     toc: true
     toc_float: true
@@ -15,7 +14,7 @@ editor_options:
 
 # Setup
 ## Notes
-In the pass1_annotation script there were some that were hard to identify and could potentially be artifact. The goal of this script is to subset the 'tangled' clusters and further inspect.
+In the pass1_annotation script there were some clusters that were hard to identify and could potentially be artifact. The goal of this script is to subset the 'tangled' clusters and further inspect.
 
 ## Working directory
 ```{r working_directory}
@@ -49,21 +48,23 @@ sex_colors <- c("darkgray","purple")
 
 ## Load data
 ```{r read_pass1_all_clusters_annotated}
-mouse.unannotated <- readRDS("../../rObjects/pass1_unannotated.rds")
-Idents(mouse.unannotated) <- "seurat_clusters"
-DefaultAssay(mouse.unannotated) <- "RNA"
-mouse.unannotated <- NormalizeData(mouse.unannotated)
+mouse.annotated <- readRDS("../../rObjects/pass1_annotated.rds")
+Idents(mouse.annotated) <- "annotated_clusters"
+DefaultAssay(mouse.annotated) <- "RNA"
+mouse.annotated <- NormalizeData(mouse.annotated)
 
-cluster_colors <- c("black","gray40","gray","red1","blue","magenta1","darkorange2",
-                    "darkorange4","yellow1","yellow4","yellow2","green","lightgreen",
-                    "chartreuse1","Aquamarine","cyan","SteelBlue","red4","forestgreen",
-                    "purple1","purple4","orange","plum1","salmon","tan","chocolate4")
-DimPlot(object = mouse.unannotated,
+# set colors
+cluster_colors <- c("firebrick1","blue","gold","orange","cyan","green","forestgreen",
+                    "darkorchid1","red3","gray","deeppink","chocolate4","black",
+                    "steelblue","pink")
+
+# umap
+umap <- DimPlot(object = mouse.annotated, 
         reduction = "umap",
-        shuffle = TRUE,
         repel = TRUE,
-        cols = cluster_colors,
-        label = TRUE)
+        group.by = "annotated_clusters",
+        cols = cluster_colors)
+umap
 ```
 
 # Recluster group 1
@@ -71,12 +72,14 @@ Group 1 consists of clusters 0, 2, 3, 4, 8, 9, 11, 13, 16, 19, 21, 25.
 ## Subset and recluster
 ```{r group1_subset_recluster}
 # subset to group 1
-mouse.unannotated$OG_unannotated_clusters <- mouse.unannotated$seurat_clusters
+mouse.annotated$OG_unannotated_clusters <- mouse.annotated$seurat_clusters
+mouse.annotated$OG_annotated_clusters <- mouse.annotated$annotated_clusters
+Idents(mouse.annotated) <- "seurat_clusters"
 myClusters <- c(0, 2, 3, 4, 8, 9, 11, 13, 16, 19, 21, 25)
-keepCells <- mouse.unannotated@meta.data[,"seurat_clusters"] %in% myClusters
-keepCol <- c(4:14,23)
-meta <- mouse.unannotated@meta.data[keepCells,keepCol]
-counts <- LayerData(mouse.unannotated, assay = "RNA", layer = "counts")[,keepCells]
+keepCells <- mouse.annotated@meta.data[,"seurat_clusters"] %in% myClusters
+keepCol <- c(4:14,25,26)
+meta <- mouse.annotated@meta.data[keepCells,keepCol]
+counts <- LayerData(mouse.annotated, assay = "RNA", layer = "counts")[,keepCells]
 group1 <- CreateSeuratObject(counts, 
                              project = "Recluster Group 1", 
                              meta.data = meta)
@@ -162,19 +165,30 @@ remove(u1)
 saveRDS(group1, "../../rObjects/pass1_recluster_group1_unannotated.rds")
 ```
 
-## Cells per cluster
+### Cells per cluster
 ```{r group1_cells_per_cluster}
-df <- as.data.frame(table(group1$seurat_clusters))
-colnames(df) <- c("cluster","cell_count")
-write.table(df,
-            file = paste0(out, "clustering_QC/unannotated_cells_per_cluster.tsv"),
+# cells per cluster
+df1 <- as.data.frame(table(group1$seurat_clusters))
+colnames(df1) <- c("cluster","cell_count")
+write.table(df1,
+            file = paste0(out, "clustering_QC/cells_per_cluster_unannotated.tsv"),
             quote = FALSE,
             row.names = FALSE,
             sep = "\t")
-remove(df)
+
+# cells per cluster per sample
+df2 <- group1@meta.data |> select(seurat_clusters, sample) |>
+  group_by(seurat_clusters, sample) |> count() |>
+  tidyr::pivot_wider(names_from = sample, values_from = n)
+write.table(x = df2,
+            file = paste0(out, "clustering_QC/cells_per_cluster_per_sample_unannotated.tsv"),
+            sep = "\t",
+            quote = FALSE,
+            row.names = FALSE)
+remove(df1,df2)
 ```
 
-## Feature plots
+### Feature plots
 ```{r group1_feature_plots, message=FALSE, warning=FALSE}
 # UMAP percent.mt
 f1 <- FeaturePlot(group1,
@@ -260,7 +274,7 @@ dev.off()
 remove(f1,f2,f3,f4,f5,f6,f7)
 ```
 
-## Dim plot
+### Dim plot
 ```{r group1_dim_plot}
 d1 <- DimPlot(group1,
               group.by = "sample",
@@ -351,7 +365,7 @@ dev.off()
 remove(d1,d2,d3,d4,d5,d6,d7)
 ```
 
-## Find markers
+### Find markers
 ```{r group1_auto_find_markers}
 Idents(group1) <- "seurat_clusters"
 markers <- SeuratWrappers::RunPrestoAll(
@@ -377,12 +391,13 @@ top10 <- Reduce(rbind,
 
 ```{r save_group1_auto_markers,echo=FALSE,eval=FALSE}
 write.table(markers, 
-            paste0(out, "markers/auto_find_markers_adjpval_0.01.tsv"),
+            paste0(out, "markers/auto_find_markers_adjpval_0.01_unannotated.tsv"),
             quote = FALSE,
+            sep = "\t",
             row.names = FALSE)
 ```
 
-## Marker violins
+### Marker violins
 ```{r group1_marker_violins}
 Idents(group1) <- "seurat_clusters"
 group1 <- NormalizeData(group1)
@@ -397,54 +412,69 @@ v1 <- VlnPlot(group1,
               features = top3$gene)
 v1
 
+goi <- c("Pdgfrb","Acta2","Vwf","Cldn5","Pecam1","Flt4","Prox1","Lyve1","Ptprc",
+         "Cd19","Ms4a1","Ighd","Cd3e","Trbc2","Il7r","Nkg7","Klrb1b","Klrb1c",
+         "Gata3","Rora","Itgax","H2-Eb1","Ccr2","Ly6c2","Lyz2","Ly6g","Itgam",
+         "Mrc1","Csf1r","Cd38","Mki67","Mcpt4","Ms4a2","Col1a2","Plp1")
 v2 <- VlnPlot(group1,
               group.by = "seurat_clusters",
               split.by = "seurat_clusters",
               stack = TRUE,
               flip = TRUE,
               cols = cluster_colors,
-              features = c("Flt1","Ptprb","C1qa","Mrc1","Col1a1","Col1a2","Notch3",
-                           "Rgs5","Kit","Fcer1a","Cdh19","Kcna1","Prox1","Flt4"))
+              features = goi)
 v2
 ```
 
 ```{r save_group1_marker_violins, echo=FALSE, eval=FALSE}
-pdf(paste0(out, "markers/auto_top3_markers_violin_unannotated.pdf"), width = 8, height = 6)
+pdf(paste0(out, "markers/auto_top3_markers_violin_unannotated.pdf"), width = 8, height = 8)
 v1
 dev.off()
 
-pdf(paste0(out, "markers/cluster_markers_violin_unannotated.pdf"), width = 8, height = 6)
+pdf(paste0(out, "markers/sandro_markers_violin_unannotated.pdf"), width = 12, height = 10)
 v2
 dev.off()
 ```
 
 
-## Assign identities
+### Assign identities
 ```{r assign_group1_idents, eval=FALSE}
 # Rename all identities
 Idents(group1) <- "seurat_clusters"
 group1.annotated <- RenameIdents(object = group1,
-                                "0" = "Ambient RNAs",              # ?
+                                "0" = "Ambient RNAs",              #
                                 "1" = "BECs",                      # Flt1,Ptprb    
                                 "2" = "Macrophages",               # C1qa,Mrc1       
                                 "3" = "Fibroblasts",               # Col1a1,Col1a2     
                                 "4" = "BECs",                      # Flt1,Ptprb      
                                 "5" = "BECs",                      # Flt1,Ptprb 
-                                "6" = "Pericytes & SMCs",          # Notch3,Rgs5
-                                "7" = "Mast cells?",               # Kit?
-                                "8" = "Doublets",                  # Mpz,Rgs5,C1qa,Col1a1
-                                "9" = "Unknown 1",                 # ?
+                                "6" = "Pericytes and SMCs",        # Notch3,Rgs5
+                                "7" = "Mast cells",                #
+                                "8" = "Macrophages",               # 
+                                "9" = "Monocytes",                 # 
                                 "10" = "Schwann cells",            # Cdh19,Kcna1
                                 "11" = "LECs",                     # Flt4,Prox1
-                                "12" = "Unknown 2")                # ?
-group1.annotated$annotated_clusters <- Idents(group1)
+                                "12" = "Dendritic cells")          #
+group1.annotated$annotated_clusters <- Idents(group1.annotated)
+group1.annotated$annotated_clusters <- factor(group1.annotated$annotated_clusters,
+                                              levels = c("Pericytes and SMCs",
+                                                         "BECs",
+                                                         "LECs",
+                                                         "Dendritic cells",
+                                                         "Monocytes",
+                                                         "Macrophages",
+                                                         "Mast cells",
+                                                         "Fibroblasts",
+                                                         "Schwann cells",
+                                                         "Ambient RNAs"))
 Idents(group1.annotated) <- "annotated_clusters"
 ```
 
+## Annotated UMAP
 ```{r group1_annotated_umap, eval=FALSE}
 # set colors
-cluster_colors <- c("black","gray","chocolate4","red","gold","green","forestgreen",
-                    "cyan","blue","steelblue","pink","purple","deeppink")
+cluster_colors <- c("red","gold","green","forestgreen","cyan","blue","purple",
+                    "gray","chocolate4","black")
 
 # umap
 umap <- DimPlot(object = group1.annotated, 
@@ -465,6 +495,138 @@ dev.off()
 ```{r save_group1_annotated_object,echo=FALSE,eval=FALSE}
 # save object
 saveRDS(group1.annotated,"../../rObjects/pass1_recluster_group1_annotated.rds")
+remove(group1)
+```
+
+
+### Find markers
+```{r group1_annotated_auto_find_markers}
+Idents(group1.annotated) <- "annotated_clusters"
+markers <- SeuratWrappers::RunPrestoAll(
+  object = group1.annotated,
+  assay = "RNA",
+  slot = "counts",
+  only.pos = FALSE
+)
+
+markers <- markers[markers$p_val_adj < 0.01,]
+
+top3 <- Reduce(rbind,
+               by(markers,
+                  markers["cluster"],
+                  head,
+                  n = 3))
+top10 <- Reduce(rbind,
+               by(markers,
+                  markers["cluster"],
+                  head,
+                  n = 10))
+```
+
+```{r save_group1_annotated_auto_markers,echo=FALSE,eval=FALSE}
+write.table(markers, 
+            paste0(out, "markers/auto_find_markers_adjpval_0.01_annotated.tsv"),
+            quote = FALSE,
+            sep = "\t",
+            row.names = FALSE)
+```
+
+### Marker violins
+```{r group1_annotated_marker_violins}
+Idents(group1.annotated) <- "annotated_clusters"
+group1 <- NormalizeData(group1.annotated)
+DefaultAssay(group1.annotated) <- "RNA"
+
+v1 <- VlnPlot(group1.annotated,
+              group.by = "annotated_clusters",
+              split.by = "annotated_clusters",
+              stack = TRUE,
+              flip = TRUE,
+              cols = cluster_colors,
+              features = top3$gene)
+v1
+
+goi <- c("Pdgfrb","Acta2","Vwf","Cldn5","Pecam1","Flt4","Prox1","Lyve1","Ptprc",
+         "Cd19","Ms4a1","Ighd","Cd3e","Trbc2","Il7r","Nkg7","Klrb1b","Klrb1c",
+         "Gata3","Rora","Itgax","H2-Eb1","Ccr2","Ly6c2","Lyz2","Ly6g","Itgam",
+         "Mrc1","Csf1r","Cd38","Mki67","Mcpt4","Ms4a2","Col1a2","Plp1")
+v2 <- VlnPlot(group1.annotated,
+              group.by = "annotated_clusters",
+              split.by = "annotated_clusters",
+              stack = TRUE,
+              flip = TRUE,
+              cols = cluster_colors,
+              features = goi)
+v2
+```
+
+```{r save_group1_annotated_marker_violins, echo=FALSE, eval=FALSE}
+pdf(paste0(out, "markers/auto_top3_markers_violin_annotated.pdf"), width = 12, height = 8)
+v1
+dev.off()
+
+pdf(paste0(out, "markers/sandro_markers_violin_annotated.pdf"), width = 12, height = 10)
+v2
+dev.off()
+```
+
+### Cells per cluster
+```{r group1_annotated_cells_per_cluster}
+# cells per cluster
+df1 <- as.data.frame(table(group1.annotated$annotated_clusters))
+colnames(df1) <- c("cluster","cell_count")
+write.table(df1,
+            file = paste0(out, "clustering_QC/cells_per_cluster_annotated.tsv"),
+            quote = FALSE,
+            row.names = FALSE,
+            sep = "\t")
+
+# cells per cluster per sample
+df2 <- group1.annotated@meta.data |> select(annotated_clusters, sample) |>
+  group_by(annotated_clusters, sample) |> count() |>
+  tidyr::pivot_wider(names_from = sample, values_from = n)
+write.table(x = df2,
+            file = paste0(out, "clustering_QC/cells_per_cluster_per_sample_annotated.tsv"),
+            sep = "\t",
+            quote = FALSE,
+            row.names = FALSE)
+remove(df1,df2)
+```
+
+## Shiny app
+```{r}
+# create new object
+library(ShinyCell)
+shiny.obj <- group1.annotated
+VariableFeatures(shiny.obj) <- shiny.obj@assays$SCT@var.features
+shiny.obj$OG_annotated_clusters <- droplevels(shiny.obj$OG_annotated_clusters)
+shiny.obj$OG_unannotated_clusters <- droplevels(shiny.obj$OG_unannotated_clusters)
+
+# set default params
+DefaultAssay(shiny.obj) <- "RNA"
+Idents(shiny.obj) <- "annotated_clusters"
+
+# create config
+names <- colnames(shiny.obj@meta.data)
+names <- names[c(24,25,2:23)]
+sc.config <- createConfig(obj = shiny.obj,
+                          meta.to.include = names)
+
+# change wd
+setwd(out)
+
+# output shiny app folder
+makeShinyApp(obj = shiny.obj, 
+             scConf = sc.config, 
+             gene.mapping = TRUE,
+             shiny.title = "Pass 1, Recluster Group 1")
+
+# manual config edits
+setwd(out)
+sc1conf <- readRDS("shinyApp/sc1conf.rds")
+sc1conf[2,4] <- "red|gold|green|forestgreen|cyan|blue|purple|gray|chocolate4|black"
+sc1conf[17,4] <- "red|gold|green|cyan|blue|purple|black"
+saveRDS(sc1conf, "shinyApp/sc1conf.rds")
 ```
 
 # Recluster group 2
@@ -473,11 +635,14 @@ saveRDS(group1.annotated,"../../rObjects/pass1_recluster_group1_annotated.rds")
 # change out dir
 out <- "../../results/pass_1/recluster_group_2/"
 # subset to group 2
+mouse.annotated$OG_unannotated_clusters <- mouse.annotated$seurat_clusters
+mouse.annotated$OG_annotated_clusters <- mouse.annotated$annotated_clusters
+Idents(mouse.annotated) <- "seurat_clusters"
 myClusters <- c(1,5,6,7,10,17,22,23,24)
-keepCells <- mouse.unannotated@meta.data[,"seurat_clusters"] %in% myClusters
-keepCol <- c(4:14,23)
-meta <- mouse.unannotated@meta.data[keepCells,keepCol]
-counts <- LayerData(mouse.unannotated, assay = "RNA", layer = "counts")[,keepCells]
+keepCells <- mouse.annotated@meta.data[,"seurat_clusters"] %in% myClusters
+keepCol <- c(4:14,25,26)
+meta <- mouse.annotated@meta.data[keepCells,keepCol]
+counts <- LayerData(mouse.annotated, assay = "RNA", layer = "counts")[,keepCells]
 group2 <- CreateSeuratObject(counts, 
                              project = "Recluster Group 2", 
                              meta.data = meta)
@@ -563,19 +728,30 @@ remove(u1)
 saveRDS(group2, "../../rObjects/pass1_recluster_group2_unannotated.rds")
 ```
 
-## Cells per cluster
+### Cells per cluster
 ```{r group2_cells_per_cluster}
-df <- as.data.frame(table(group2$seurat_clusters))
-colnames(df) <- c("cluster","cell_count")
-write.table(df,
-            file = paste0(out, "clustering_QC/unannotated_cells_per_cluster.tsv"),
+# cells per cluster
+df1 <- as.data.frame(table(group2$seurat_clusters))
+colnames(df1) <- c("cluster","cell_count")
+write.table(df1,
+            file = paste0(out, "clustering_QC/cells_per_cluster_unannotated.tsv"),
             quote = FALSE,
             row.names = FALSE,
             sep = "\t")
-remove(df)
+
+# cells per cluster per sample
+df2 <- group2@meta.data |> select(seurat_clusters, sample) |>
+  group_by(seurat_clusters, sample) |> count() |>
+  tidyr::pivot_wider(names_from = sample, values_from = n)
+write.table(x = df2,
+            file = paste0(out, "clustering_QC/cells_per_cluster_per_sample_unannotated.tsv"),
+            sep = "\t",
+            quote = FALSE,
+            row.names = FALSE)
+remove(df1,df2)
 ```
 
-## Feature plots
+### Feature plots
 ```{r group2_feature_plots_unannotated, message=FALSE, warning=FALSE}
 # UMAP percent.mt
 f1 <- FeaturePlot(group2,
@@ -661,7 +837,7 @@ dev.off()
 remove(f1,f2,f3,f4,f5,f6,f7)
 ```
 
-## Dim plot
+### Dim plot
 ```{r group2_dim_plot}
 d1 <- DimPlot(group2,
               group.by = "sample",
@@ -752,7 +928,7 @@ dev.off()
 remove(d1,d2,d3,d4,d5,d6,d7)
 ```
 
-## Find markers
+### Find markers
 ```{r group2_auto_find_markers}
 Idents(group2) <- "seurat_clusters"
 markers <- SeuratWrappers::RunPrestoAll(
@@ -778,12 +954,13 @@ top10 <- Reduce(rbind,
 
 ```{r save_group2_auto_markers,echo=FALSE,eval=FALSE}
 write.table(markers, 
-            paste0(out, "markers/auto_find_markers_adjpval_0.01.tsv"),
+            paste0(out, "markers/auto_find_markers_adjpval_0.01_unannotated.tsv"),
             quote = FALSE,
+            sep = "\t",
             row.names = FALSE)
 ```
 
-## Marker violins
+### Marker violins
 ```{r group2_marker_violins}
 Idents(group2) <- "seurat_clusters"
 group2 <- NormalizeData(group2)
@@ -798,49 +975,60 @@ v1 <- VlnPlot(group2,
               features = top3$gene)
 v1
 
+goi <- c("Pdgfrb","Acta2","Vwf","Cldn5","Pecam1","Flt4","Prox1","Lyve1","Ptprc",
+         "Cd19","Ms4a1","Ighd","Cd3e","Trbc2","Il7r","Nkg7","Klrb1b","Klrb1c",
+         "Gata3","Rora","Itgax","H2-Eb1","Ccr2","Ly6c2","Lyz2","Ly6g","Itgam",
+         "Mrc1","Csf1r","Cd38","Mki67","Mcpt4","Ms4a2","Col1a2","Plp1")
 v2 <- VlnPlot(group2,
               group.by = "seurat_clusters",
               split.by = "seurat_clusters",
               stack = TRUE,
               flip = TRUE,
               cols = cluster_colors,
-              features = c("C1qa","Ms4a7","Nkg7","Cd3e","Trac","Il23r","Ms4a1",
-                           "Fcrla","Fgr","Flt1","Flt3"))
+              features = goi)
 v2
 ```
 
 ```{r save_group2_marker_violins}
-pdf(paste0(out, "markers/auto_top3_markers_violin_unannotated.pdf"), width = 8, height = 6)
+pdf(paste0(out, "markers/auto_top3_markers_violin_unannotated.pdf"), width = 8, height = 8)
 v1
 dev.off()
 
-pdf(paste0(out, "markers/cluster_markers_violin_unannotated.pdf"), width = 8, height = 6)
+pdf(paste0(out, "markers/sandro_markers_violin_unannotated.pdf"), width = 12, height = 10)
 v2
 dev.off()
 ```
 
 
-## Assign identities
+### Assign identities
 ```{r assign_group2_idents}
 # Rename all identities
 Idents(group2) <- "seurat_clusters"
 group2.annotated <- RenameIdents(object = group2,
-                                "0" = "Macrophages",    # C1qa,Ms4a7
-                                "1" = "T cells",        # Cd3e,Trac  
-                                "2" = "B cells",        # Ms4a1,Fcrla     
-                                "3" = "Monocytes?",     # Fgr   
-                                "4" = "B cells?",       # Fcrla      
-                                "5" = "T cells",        # Cd3e
-                                "6" = "Contaminating endothelial",    # Flt1
-                                "7" = "DCs")            # Flt3
-group2.annotated$annotated_clusters <- Idents(group2)
+                                "0" = "Macrophages",        # C1qa,Ms4a7
+                                "1" = "T and NK cells",     # Cd3e,Trac  
+                                "2" = "B cells",            # Ms4a1,Fcrla     
+                                "3" = "Dendritic cells",    # Fgr   
+                                "4" = "Myeloid precursors", # Fcrla      
+                                "5" = "T and NK cells",     # Cd3e
+                                "6" = "Myeloid precursors", # Flt1
+                                "7" = "DCs?Ambient?")       # Flt3
+group2.annotated$annotated_clusters <- Idents(group2.annotated)
+Idents(group2.annotated) <- "annotated_clusters"
+group2.annotated$annotated_clusters <- factor(group2.annotated$annotated_clusters,
+                                              levels = c("B cells",
+                                                         "T and NK cells",
+                                                         "Dendritic cells",
+                                                         "Macrophages",
+                                                         "Myeloid precursors",
+                                                         "DCs?Ambient?"))
 Idents(group2.annotated) <- "annotated_clusters"
 ```
 
+## Annotated UMAP
 ```{r group2_annotated_umap}
 # set colors
-cluster_colors <- c("black","gray","chocolate4","red","gold","green","forestgreen",
-                    "cyan","blue","steelblue","pink","purple","deeppink")
+cluster_colors <- c("red", "gold", "chartreuse", "blue","purple","black")
 
 # umap
 umap <- DimPlot(object = group2.annotated, 
@@ -853,7 +1041,7 @@ umap
 
 ```{r save_group2_annotated_umap, echo=FALSE, eval=FALSE}
 path <- paste0(out, "UMAP/annotated_clusters_dim1&2_umap.pdf")
-pdf(path, width = 8, height = 4)
+pdf(path, width = 6, height = 4)
 umap
 dev.off()
 ```
@@ -863,4 +1051,134 @@ dev.off()
 saveRDS(group2.annotated,"../../rObjects/pass1_recluster_group2_annotated.rds")
 ```
 
+
+### Find markers
+```{r group2_annotated_auto_find_markers}
+Idents(group2.annotated) <- "annotated_clusters"
+markers <- SeuratWrappers::RunPrestoAll(
+  object = group2.annotated,
+  assay = "RNA",
+  slot = "counts",
+  only.pos = FALSE
+)
+
+markers <- markers[markers$p_val_adj < 0.01,]
+
+top3 <- Reduce(rbind,
+               by(markers,
+                  markers["cluster"],
+                  head,
+                  n = 3))
+top10 <- Reduce(rbind,
+               by(markers,
+                  markers["cluster"],
+                  head,
+                  n = 10))
+```
+
+```{r save_group2_annotated_auto_markers,echo=FALSE,eval=FALSE}
+write.table(markers, 
+            paste0(out, "markers/auto_find_markers_adjpval_0.01_annotated.tsv"),
+            quote = FALSE,
+            sep = "\t",
+            row.names = FALSE)
+```
+
+### Marker violins
+```{r group2_annotated_marker_violins}
+Idents(group2.annotated) <- "annotated_clusters"
+group2 <- NormalizeData(group2.annotated)
+DefaultAssay(group2.annotated) <- "RNA"
+
+v1 <- VlnPlot(group2.annotated,
+              group.by = "annotated_clusters",
+              split.by = "annotated_clusters",
+              stack = TRUE,
+              flip = TRUE,
+              cols = cluster_colors,
+              features = top3$gene)
+v1
+
+goi <- c("Pdgfrb","Acta2","Vwf","Cldn5","Pecam1","Flt4","Prox1","Lyve1","Ptprc",
+         "Cd19","Ms4a1","Ighd","Cd3e","Trbc2","Il7r","Nkg7","Klrb1b","Klrb1c",
+         "Gata3","Rora","Itgax","H2-Eb1","Ccr2","Ly6c2","Lyz2","Ly6g","Itgam",
+         "Mrc1","Csf1r","Cd38","Mki67","Mcpt4","Ms4a2","Col1a2","Plp1")
+v2 <- VlnPlot(group2.annotated,
+              group.by = "annotated_clusters",
+              split.by = "annotated_clusters",
+              stack = TRUE,
+              flip = TRUE,
+              cols = cluster_colors,
+              features = goi)
+v2
+```
+
+```{r save_group2_annotated_marker_violins, echo=FALSE, eval=FALSE}
+pdf(paste0(out, "markers/auto_top3_markers_violin_annotated.pdf"), width = 12, height = 8)
+v1
+dev.off()
+
+pdf(paste0(out, "markers/sandro_markers_violin_annotated.pdf"), width = 12, height = 10)
+v2
+dev.off()
+```
+
+### Cells per cluster
+```{r group2_annotated_cells_per_cluster}
+# cells per cluster
+df1 <- as.data.frame(table(group2.annotated$annotated_clusters))
+colnames(df1) <- c("cluster","cell_count")
+write.table(df1,
+            file = paste0(out, "clustering_QC/cells_per_cluster_annotated.tsv"),
+            quote = FALSE,
+            row.names = FALSE,
+            sep = "\t")
+
+# cells per cluster per sample
+df2 <- group2.annotated@meta.data |> select(annotated_clusters, sample) |>
+  group_by(annotated_clusters, sample) |> count() |>
+  tidyr::pivot_wider(names_from = sample, values_from = n)
+write.table(x = df2,
+            file = paste0(out, "clustering_QC/cells_per_cluster_per_sample_annotated.tsv"),
+            sep = "\t",
+            quote = FALSE,
+            row.names = FALSE)
+remove(df1,df2)
+```
+
+## Shiny app
+```{r}
+# create new object
+library(ShinyCell)
+shiny.obj <- group2.annotated
+VariableFeatures(shiny.obj) <- shiny.obj@assays$SCT@var.features
+shiny.obj$OG_annotated_clusters <- droplevels(shiny.obj$OG_annotated_clusters)
+shiny.obj$OG_unannotated_clusters <- droplevels(shiny.obj$OG_unannotated_clusters)
+
+# set default params
+DefaultAssay(shiny.obj) <- "RNA"
+Idents(shiny.obj) <- "annotated_clusters"
+
+# create config
+names <- colnames(shiny.obj@meta.data)
+names <- names[c(24,25,2:23)]
+sc.config <- createConfig(obj = shiny.obj,
+                          meta.to.include = names)
+
+# change wd
+setwd(out)
+
+# output shiny app folder
+makeShinyApp(obj = shiny.obj, 
+             scConf = sc.config, 
+             gene.mapping = TRUE,
+             shiny.title = "Pass 1, Recluster Group 2")
+
+# manual config edits
+setwd(out)
+sc1conf <- readRDS("shinyApp/sc1conf.rds")
+sc1conf[2,4] <- "red|gold|chartreuse|blue|purple|black"
+sc1conf[17,4] <- "red|gold|green|cyan|blue"
+saveRDS(sc1conf, "shinyApp/sc1conf.rds")
+```
 

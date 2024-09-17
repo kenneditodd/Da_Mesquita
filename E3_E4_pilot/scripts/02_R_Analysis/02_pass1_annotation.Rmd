@@ -876,6 +876,14 @@ mouse.annotated <- RenameIdents(object = mouse.unannotated,
                                 "24" = "Monocytes",
                                 "25" = "Ambient RNAs?")
 mouse.annotated$annotated_clusters <- Idents(mouse.annotated)
+Idents(mouse.annotated) <- "annotated_clusters"
+mouse.annotated$annotated_clusters <- factor(mouse.annotated$annotated_clusters,
+                                              levels = c("Pericytes and SMCs",
+                                                         "Endothelial",
+                                                         "B cells",
+                                                         "T and NK cells",
+                                                         "ILCs"))
+Idents(mouse.annotated) <- "annotated_clusters"
 ```
 
 ```{r annotated_umap_merged}
@@ -907,43 +915,72 @@ saveRDS(mouse.annotated,"../../rObjects/pass1_annotated.rds")
 
 # Markers
 ```{r annotated_cluster_markers}
-v <- VlnPlot(mouse.annotated,
+v1 <- VlnPlot(mouse.annotated,
         features = c("C1qb","Flt1","Col1a2","Itgax","Fgr","Cd3e","Cd19","Retnlg",
                      "Il7r","Rgs5","Kit","Mpz","Sdc1","Ttr"),
         split.by = "annotated_clusters",
         flip = TRUE,
         stack = TRUE,
         cols = cluster_colors)
-v
+v1
+
+goi <- c("Pdgfrb","Acta2","Vwf","Cldn5","Pecam1","Flt4","Prox1","Lyve1","Ptprc",
+         "Cd19","Ms4a1","Ighd","Cd3e","Trbc2","Il7r","Nkg7","Klrb1b","Klrb1c",
+         "Gata3","Rora","Itgax","H2-Eb1","Ccr2","Ly6c2","Lyz2","Ly6g","Itgam",
+         "Mrc1","Csf1r","Cd38","Mki67","Mcpt4","Ms4a2","Col1a2","Plp1")
+v2 <- VlnPlot(mouse.annotated,
+              group.by = "annotated_clusters",
+              split.by = "annotated_clusters",
+              stack = TRUE,
+              flip = TRUE,
+              cols = cluster_colors,
+              features = goi)
+v2
 ```
 
 ```{r save_annotated_cluster_markers, eval=FALSE, echo=FALSE}
-v
-path <- "../../results/pass_1/all_clusters/markers/cluster_markers_violin"
-saveToPDF(paste0(path, ".pdf"), width = 10, height = 6)
+pdf(paste0(out, "markers/cluster_markers_violin_annotated.pdf"), width = 8, height = 8)
+v1
+dev.off()
+
+pdf(paste0(out, "markers/sandro_markers_violin_annotated.pdf"), width = 12, height = 10)
+v2
 dev.off()
 ```
 
 # Shiny App
-## Cleanup object
-```{r cleanup_obj,eval=FALSE}
-mouse.annotated@assays$RNA@var.features <- 
-  mouse.annotated@assays$SCT@var.features
-metadata <- mouse.annotated@meta.data
-metadata <- metadata[,c(25,26,2:14)]
-colnames(metadata)[1] <- "unannotated_clusters"
-mouse.annotated@meta.data <- metadata
-mouse.annotated@assays$SCT@meta.features <- metadata
-mouse.annotated@assays$RNA@meta.features <- metadata
+```{r}
+# create new object
+library(ShinyCell)
+shiny.obj <- mouse.annotated
+VariableFeatures(shiny.obj) <- shiny.obj@assays$SCT@var.features
+
+# set default params
+DefaultAssay(shiny.obj) <- "RNA"
+Idents(shiny.obj) <- "annotated_clusters"
+
+# create config
+names <- colnames(shiny.obj@meta.data)
+names <- names[c(22,24,2:21)]
+sc.config <- createConfig(obj = shiny.obj,
+                          meta.to.include = names)
+
+# change wd
+setwd(out)
+
+# output shiny app folder
+makeShinyApp(obj = shiny.obj, 
+             scConf = sc.config, 
+             gene.mapping = TRUE,
+             shiny.title = "Pass 1, All Clusters")
+
+# manual config edits
+setwd(out)
+sc1conf <- readRDS("shinyApp/sc1conf.rds")
+cluster_colors <- c("firebrick1","blue","gold","orange","cyan","green","forestgreen",
+                    "darkorchid1","red3","gray","deeppink","chocolate4","black",
+                    "steelblue","pink")
+sc1conf[2,4] <- "red|blue|gold|orange|cyan|green|forestgreen|darkorchid1|red3|gray|deeppink|chocolate4|black|steelblue|pink"
+saveRDS(sc1conf, "shinyApp/sc1conf.rds")
 ```
 
-## Output directory
-```{r output_shiny_folder, eval=FALSE}
-# make shiny folder
-setwd("../../results/pass_1/all_clusters")
-DefaultAssay(mouse.annotated) <- "RNA"
-Idents(mouse.annotated) <- mouse.annotated$merged_clusters
-sc.config <- createConfig(mouse.annotated)
-makeShinyApp(mouse.annotated, sc.config, gene.mapping = TRUE,
-             shiny.title = "Pass 1: Mouse Meningeal Dura scRNAseq") 
-```
