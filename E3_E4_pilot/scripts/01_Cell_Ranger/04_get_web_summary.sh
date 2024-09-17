@@ -6,7 +6,7 @@
 source ../../refs/.env
 
 # extract webs summaries
-for sample in E3_2M_F E3_14M_F E3_2M_M E3_14M_M E4_2M_F E4_14M_F E4_2M_M E4_14M_M
+for sample in E3_14M_F E3_14M_M E4_14M_F E4_14M_M
 do
 	cd $COUNTS_DIR/$sample/outs
 	cp web_summary.html ../../web_summaries/"$sample"_web_summary.html

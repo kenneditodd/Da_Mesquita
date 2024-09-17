@@ -9,12 +9,8 @@ load_dot_env(file = "../../refs/.env")  # Adjust the path to your .env file
 counts_dir <- Sys.getenv("COUNTS_DIR")
 
 # file locations
-locations <- c(paste0(counts_dir, "/E3_2M_F/outs/metrics_summary.csv"),
-               paste0(counts_dir, "/E3_2M_M/outs/metrics_summary.csv"),
-               paste0(counts_dir, "/E3_14M_F/outs/metrics_summary.csv"),
+locations <- c(paste0(counts_dir, "/E3_14M_F/outs/metrics_summary.csv"),
                paste0(counts_dir, "/E3_14M_M/outs/metrics_summary.csv"),
-               paste0(counts_dir, "/E4_2M_F/outs/metrics_summary.csv"),
-               paste0(counts_dir, "/E4_2M_M/outs/metrics_summary.csv"),
                paste0(counts_dir, "/E4_14M_F/outs/metrics_summary.csv"),
                paste0(counts_dir, "/E4_14M_M/outs/metrics_summary.csv"))
 

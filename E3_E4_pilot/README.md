@@ -9,12 +9,8 @@ located on most haematopoietic cells, positive selection of leukocytes
     - Might ended up with more because we sequenced with the NovaSeq S2
 - Expecting to see a lot of leukocytes and vascular cells
 - The purpose is to check the effect of sex, Apoe isoform expression and age (and respective interactions) on the transcriptomes of the different cell subpopulations
-- 8 experimental groups/samples
+- 4 experimental groups/samples
   + E3_2M_F = APOE3 expressing; 2 months old; female
-  + E3_14M_F = APOE3 expressing; 14 months old; female
   + E3_2M_M = APOE3 expressing; 2 months old; male
-  + E3_14M_M = APOE3 expressing; 14 months old; male
   + E4_2M_F = APOE4 expressing; 2 months old; female
-  + E4_14M_F = APOE4 expressing; 14 months old; female
   + E4_2M_M = APOE4 expressing; 2 months old; male
-  + E4_14M_M = APOE4 expressing; 14 months old; male
