@@ -2,10 +2,9 @@
 title: "E3/E4 Mice Meningeal Dura scRNAseq"
 subtitle: "Filtering, Normalization, Clustering"
 author: "Kennedi Todd"
-date: "07/26/2024"
+date: "09/17/2024"
 output:
   html_document:
-    code_folding: hide
     theme: cerulean
     toc: true
     toc_float: true
@@ -23,7 +22,7 @@ located on most haematopoietic cells, positive selection of leukocytes \
 - Aimed for ~5000 cells per sample to be sequenced at least 50,000 reads per cell \
   + Might ended up with more because we sequenced with the NovaSeq S2 \
 - Expecting to see a lot of leukocytes and vascular cells \
-- The purpose is to check the effect of sex, Apoe isoform expression and age (and respective interactions) on the transcriptomes of the different cell subpopulations \
+- The purpose is to check the effect of sex and Apoe isoform expression on the transcriptomes of the different cell subpopulations \
 - 4 experimental groups/samples
   + E3_14M_F = APOE3 expressing; 14 months old; female \
   + E3_14M_M = APOE3 expressing; 14 months old; male \
@@ -37,11 +36,12 @@ knitr::opts_knit$set(root.dir = ".")
 ```
 
 ## Load libraries
-```{r libraries, message=FALSE, warnings=FALSE}
+```{r libraries, warning=FALSE, message=FALSE}
 library(cowplot)     # plot_grid()
 library(dplyr)       # left_join()
 library(ggplot2)     # ggplot()
 library(gridExtra)   # grid.arrange()
+library(Matrix)      # rowSums()
 library(parallel)    # detectCores()
 library(rtracklayer) # import()
 library(scCustomize) # Merge_Seurat_List()
@@ -80,7 +80,7 @@ saveToPDF <- function(...) {
 
 # Load data
 ## Merge h5
-```{r read_h5, warning=FALSE}
+```{r read_h5}
 prefix <- "../../counts/"
 suffix <- "/outs/filtered_feature_bc_matrix.h5"
 
@@ -201,7 +201,7 @@ ncells1
 ```
 
 ## Density plots
-```{r prefiltering_density, warning=FALSE}
+```{r prefiltering_density}
 # Visualize nCount_RNA
 den1 <- ggplot(mouse@meta.data,
        aes(color = sample,
@@ -315,7 +315,10 @@ remove(den1,den2,den3,den4,den5,den6,layout,grid,plots,data)
 ```
 
 ## Violin plots
-```{r prefiltering_violins, warning=FALSE}
+```{r prefiltering_violins}
+# normalize data for violin plots
+mouse <- NormalizeData(mouse, assay = "RNA")
+
 # nFeature, nCount, and cell.complexity violins
 v1 <- VlnPlot(mouse,
               features = c("nFeature_RNA", "nCount_RNA","cell.complexity"),
@@ -411,7 +414,7 @@ print(paste0(dim(mouse)[2] - dim(mouse.filtered)[2]," cells removed"))
 
 ## Gene-level filtering
 Remove lowly expressed genes.  We will keep genes that have at least 1 count in 10 cells.
-```{r gene_filtering, warning=FALSE, message=FALSE}
+```{r gene_filtering}
 # filter genes
 mouse.filtered <- JoinLayers(mouse.filtered)
 counts <- GetAssayData(object = mouse.filtered, layer = "counts")
@@ -487,7 +490,7 @@ remove(ncells1,ncells2,plots,layout,grid,data)
 ```
 
 ## Density plots
-```{r postfiltering_density, warning=FALSE}
+```{r postfiltering_density}
 # Visualize nCount_RNA
 den1 <- ggplot(mouse.filtered@meta.data,
        aes(color = sample,
@@ -603,6 +606,9 @@ remove(den1,den2,den3,den4,den5,den6,plots,layout,grid)
 
 ## Violin plots
 ```{r postfiltering_violins}
+# normalize data before violin plots
+mouse.filtered <- NormalizeData(mouse.filtered)
+
 # nFeature, nCount, and cell.complexity violins
 v3 <- VlnPlot(mouse.filtered,
               features = c("nFeature_RNA", "nCount_RNA","cell.complexity"),
@@ -640,7 +646,7 @@ remove(v3,v4)
 ```
 
 ## Scatter plots
-```{r postfiltering_scatter}
+```{r postfiltering_scatter, warning=FALSE}
 s3 <- ggplot(
   mouse.filtered@meta.data,
   aes(x = nCount_RNA, y = nFeature_RNA, color = percent.mt)) + 
@@ -710,7 +716,6 @@ remove(b1)
 ```
 
 ## Top transcripts
-- Gm42418: Rn18s-rs5
 ```{r top_transcripts}
 df <- data.frame(gene_name = rownames(mouse.filtered))
 df$rsum <- rowSums(x = mouse.filtered, slot = "counts")
@@ -766,11 +771,11 @@ mouse.filtered <- SCTransform(mouse.filtered, verbose = FALSE)
 uninteresting sources of variation, SCTransform will rank the genes by residual 
 variance and output the 3000 most variant genes. If the data set has larger cell 
 numbers, then it may be beneficial to adjust this parameter higher using the 
-variable.features.n argument. Additionally the last line of output specifies “Set default assay to SCT”. \
+variable.features.n argument. \
 - It is suggested to not regress out batch, and instead use a data integration method like Harmony \
 
 ## PCA
-```{r run_pca, warning=FALSE, message=FALSE}
+```{r run_pca}
 # run PCA on the merged object
 mouse.filtered <- RunPCA(object = mouse.filtered, assay = "SCT")
 ```
@@ -859,7 +864,7 @@ remove(pca1,pca2,pca3,pca4,e1)
 ```
 
 ## Harmony
-```{r run_harmony}
+```{r run_harmony, warning=FALSE}
 # integrate
 mouse.filtered <- IntegrateLayers(mouse.filtered,
                                   method = "HarmonyIntegration",
@@ -954,7 +959,7 @@ essentially representing a “metagene” that combines information across a
 correlated gene set. Determining how many PCs to include in the clustering step 
 is therefore important to ensure that we are capturing the majority of the 
 variation, or cell types, present in our dataset.
-```{r}
+```{r run_umap, warning=FALSE}
 # run UMAP
 mouse.filtered <- RunUMAP(mouse.filtered,
                           dims = 1:15,
@@ -970,25 +975,12 @@ DimPlot(mouse.filtered,
 
 ## Clusters
 
-Seurat uses a graph-based clustering approach, which embeds cells in a graph 
-structure, using a K-nearest neighbor (KNN) graph (by default), with edges drawn 
-between cells with similar gene expression patterns. Then, it attempts to 
-partition this graph into highly interconnected ‘quasi-cliques’ or ‘communities’ 
-[Seurat - Guided Clustering Tutorial]. \
+- Seurat uses a graph-based clustering approach, which embeds cells in a graph 
+structure, using a K-nearest neighbor (KNN) graph. By default, it uses k = 30. \
+- Then, it creates a shared nearest neighbor (SNN) graph and identifies communities \
+- Increased resolution leads to a greater number of clusters \
 
-We will use the FindClusters() function to perform the graph-based clustering. 
-The resolution is an important argument that sets the “granularity” of the 
-downstream clustering and will need to be optimized for every individual experiment. 
-For datasets of 3,000 - 5,000 cells, the resolution set between 0.4-1.4 generally 
-yields good clustering. Increased resolution values lead to a greater number of 
-clusters, which is often required for larger datasets. \
-
-The FindClusters() function allows us to enter a series of resolutions and will 
-calculate the “granularity” of the clustering. This is very helpful for testing 
-which resolution works for moving forward without having to run the function for 
-each resolution. \
-
-```{r find_neighbors, message=FALSE, warning=FALSE}
+```{r find_neighbors}
 # Determine the K-nearest neighbor graph
 mouse.unannotated <- FindNeighbors(object = mouse.filtered,
                                    assay = "SCT", # set as default after SCTransform
