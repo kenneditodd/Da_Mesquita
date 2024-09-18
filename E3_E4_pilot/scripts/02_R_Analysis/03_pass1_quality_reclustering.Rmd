@@ -16,8 +16,7 @@ editor_options:
 ## Notes
 In the pass1_annotation script there were some clusters that were hard to identify and could potentially be artifact. The goal of this script is to subset the 'tangled' clusters and further inspect.
 
-## Working directory
-```{r working_directory}
+```{r working_directory, echo=FALSE}
 knitr::opts_knit$set(root.dir = ".")
 ```
 
@@ -27,9 +26,11 @@ library(dplyr)        # ungroup()
 library(ggtree)       # BuildClusterTree()
 library(gridExtra)    # grid.arrange()
 library(gtools)       # smartbind()
+library(Matrix)       # rowSums()
 library(parallel)     # detectCores()
 library(plotly)       # plot_ly()
 library(Seurat)       # Idents()
+library(SeuratWrappers) # RunPrestoAll()
 library(ShinyCell)    # createConfig()
 library(tidyr)        # %>%
 ```
@@ -77,7 +78,7 @@ mouse.annotated$OG_annotated_clusters <- mouse.annotated$annotated_clusters
 Idents(mouse.annotated) <- "seurat_clusters"
 myClusters <- c(0, 2, 3, 4, 8, 9, 11, 13, 16, 19, 21, 25)
 keepCells <- mouse.annotated@meta.data[,"seurat_clusters"] %in% myClusters
-keepCol <- c(4:14,25,26)
+keepCol <- c(4:14,24,25)
 meta <- mouse.annotated@meta.data[keepCells,keepCol]
 counts <- LayerData(mouse.annotated, assay = "RNA", layer = "counts")[,keepCells]
 group1 <- CreateSeuratObject(counts, 
@@ -498,7 +499,6 @@ saveRDS(group1.annotated,"../../rObjects/pass1_recluster_group1_annotated.rds")
 remove(group1)
 ```
 
-
 ### Find markers
 ```{r group1_annotated_auto_find_markers}
 Idents(group1.annotated) <- "annotated_clusters"
@@ -593,10 +593,17 @@ write.table(x = df2,
 remove(df1,df2)
 ```
 
+## Cells to remove
+```{r cells_to_remove, eval=FALSE}
+barcodes <- group1.annotated@meta.data
+barcodes <- barcodes[barcodes$annotated_clusters == "Ambient RNAs",]
+barcodes <- rownames(barcodes)
+saveRDS(barcodes, "../../rObjects/pass1_group1_cells_to_remove.rds")
+```
+
 ## Shiny app
-```{r}
+```{r shiny_app_group1, eval=FALSE}
 # create new object
-library(ShinyCell)
 shiny.obj <- group1.annotated
 VariableFeatures(shiny.obj) <- shiny.obj@assays$SCT@var.features
 shiny.obj$OG_annotated_clusters <- droplevels(shiny.obj$OG_annotated_clusters)
@@ -622,7 +629,6 @@ makeShinyApp(obj = shiny.obj,
              shiny.title = "Pass 1, Recluster Group 1")
 
 # manual config edits
-setwd(out)
 sc1conf <- readRDS("shinyApp/sc1conf.rds")
 sc1conf[2,4] <- "red|gold|green|forestgreen|cyan|blue|purple|gray|chocolate4|black"
 sc1conf[17,4] <- "red|gold|green|cyan|blue|purple|black"
@@ -633,6 +639,7 @@ saveRDS(sc1conf, "shinyApp/sc1conf.rds")
 ## Subset and recluster
 ```{r group2_subset_recluster}
 # change out dir
+remove(group1.annotated)
 out <- "../../results/pass_1/recluster_group_2/"
 # subset to group 2
 mouse.annotated$OG_unannotated_clusters <- mouse.annotated$seurat_clusters
@@ -640,7 +647,7 @@ mouse.annotated$OG_annotated_clusters <- mouse.annotated$annotated_clusters
 Idents(mouse.annotated) <- "seurat_clusters"
 myClusters <- c(1,5,6,7,10,17,22,23,24)
 keepCells <- mouse.annotated@meta.data[,"seurat_clusters"] %in% myClusters
-keepCol <- c(4:14,25,26)
+keepCol <- c(4:14,24,25)
 meta <- mouse.annotated@meta.data[keepCells,keepCol]
 counts <- LayerData(mouse.annotated, assay = "RNA", layer = "counts")[,keepCells]
 group2 <- CreateSeuratObject(counts, 
@@ -1147,7 +1154,7 @@ remove(df1,df2)
 ```
 
 ## Shiny app
-```{r}
+```{r shiny_app_group2, eval=FALSE}
 # create new object
 library(ShinyCell)
 shiny.obj <- group2.annotated
@@ -1175,7 +1182,6 @@ makeShinyApp(obj = shiny.obj,
              shiny.title = "Pass 1, Recluster Group 2")
 
 # manual config edits
-setwd(out)
 sc1conf <- readRDS("shinyApp/sc1conf.rds")
 sc1conf[2,4] <- "red|gold|chartreuse|blue|purple|black"
 sc1conf[17,4] <- "red|gold|green|cyan|blue"
