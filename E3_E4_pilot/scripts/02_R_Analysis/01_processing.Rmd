@@ -974,12 +974,10 @@ DimPlot(mouse.filtered,
 ```
 
 ## Clusters
-
 - Seurat uses a graph-based clustering approach, which embeds cells in a graph 
 structure, using a K-nearest neighbor (KNN) graph. By default, it uses k = 30. \
 - Then, it creates a shared nearest neighbor (SNN) graph and identifies communities \
 - Increased resolution leads to a greater number of clusters \
-
 ```{r find_neighbors}
 # Determine the K-nearest neighbor graph
 mouse.unannotated <- FindNeighbors(object = mouse.filtered,

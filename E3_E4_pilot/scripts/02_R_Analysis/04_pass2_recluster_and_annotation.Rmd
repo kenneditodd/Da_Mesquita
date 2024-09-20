@@ -20,6 +20,7 @@ knitr::opts_knit$set(root.dir = ".")
 ## Libraries
 ```{r libraries, message=FALSE, warning=FALSE}
 # load packages
+library(ggplot2)        # geom_vline()
 library(ggtree)         # BuildClusterTree()
 library(Matrix)         # rowSums()
 library(Seurat)         # Idents()
@@ -55,7 +56,7 @@ mouse.annotated <- readRDS("../../rObjects/pass1_annotated.rds")
 
 # Filter
 ## Cells
-```{r}
+```{r filter_cells}
 # load unwanted barcodes
 barcodes_to_remove <- mouse.annotated@meta.data
 barcodes_to_remove <- barcodes_to_remove[barcodes_to_remove$annotated_clusters == "Ambient RNAs" |
@@ -108,7 +109,7 @@ mouse.filtered
 - When using Seurat v5 assays you can keep all the data in one object and split
 the layers (unlike Seurat v4). \
 - Use SCTransform for normalization, variable features, and scaling \
-```{r sctransform, warning=FALSE, eval=FALSE}
+```{r sctransform, warning=FALSE}
 # split layers by sample
 mouse.filtered[["RNA"]] <- split(mouse.filtered[["RNA"]], f = mouse.filtered$sample)
 # check layers are split
@@ -145,7 +146,7 @@ mouse.filtered@reductions$harmony@stdev <-
   apply(mouse.filtered@reductions$harmony@cell.embeddings, 2, sd)
 ElbowPlot(mouse.filtered,
           reduction = "harmony") +
-  geom_vline(xintercept = 10, linetype = "dashed", color = "red")
+  geom_vline(xintercept = 15, linetype = "dashed", color = "red")
 ```
 
 ## UMAP
@@ -182,29 +183,55 @@ DefaultAssay(mouse.unannotated) <- "RNA"
 mouse.unannotated <- NormalizeData(mouse.unannotated)
 ```
 
+
+## Explore resolutions
+```{r explore_resolutions}
+# 0.1
+DimPlot(mouse.unannotated,
+        group.by = "SCT_snn_res.0.1",
+        label = TRUE)
+
+# 0.2
+DimPlot(mouse.unannotated,
+        group.by = "SCT_snn_res.0.2",
+        label = TRUE)
+
+# 0.3
+DimPlot(mouse.unannotated,
+        group.by = "SCT_snn_res.0.3",
+        label = TRUE)
+
+# 0.4
+DimPlot(mouse.unannotated,
+        group.by = "SCT_snn_res.0.4",
+        label = TRUE)
+
+# 0.5
+DimPlot(mouse.unannotated,
+        group.by = "SCT_snn_res.0.5",
+        label = TRUE)
+```
+
 ```{r save_unannotated_obj, eval=FALSE, echo=FALSE}
+# set default params
+Idents(mouse.unannotated) <- "seurat_clusters"
 # save object
 saveRDS(mouse.unannotated, "../../rObjects/pass2_unannotated.rds")
 # cleanup
-remove(counts,counts.filtered,nonzero)
+remove(counts,counts.filtered,nonzero,mouse.filtered)
 ```
 
-
-```{r}
-FeaturePlot(mouse.unannotated,
-            features = "percent.hb")+ 
-  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
-```
-
-
-## Unannotated UMAP
+# Unannotated QC
+## UMAP
 ```{r unannotated_pass2_umap}
 Idents(mouse.unannotated) <- "seurat_clusters"
 
-cluster_colors <- c("black","gray40","gray","red1","blue","magenta1","darkorange2",
-                    "darkorange4","gold","yellow4","forestgreen","green","lightgreen",
-                    "chartreuse1","aquamarine","cyan","steelBlue","red4","yellow2",
-                    "purple1","purple4","orange","plum1","salmon")
+cluster_colors <- c("red","darkorange","purple","yellow","chocolate4",
+                    "lightgreen","chartreuse3","darkgreen",
+                    "cyan","steelblue","blue",
+                    "gold2","deeppink","pink",
+                    "tan","salmon","gray","black",
+                    "red4")
 
 u1 <- DimPlot(mouse.unannotated,
               label = TRUE,
@@ -228,6 +255,90 @@ dev.off()
 u2
 saveToPDF(paste0(out, "UMAP/unannotated_clusters_dim2&3.pdf"), width = 8, height = 4)
 dev.off()
+```
+
+## Feature plots
+```{r feature_plots_unannotated, message=FALSE, warning=FALSE}
+# UMAP percent.mt
+FeaturePlot(mouse.unannotated,
+            reduction = "umap", 
+            features = "percent.mt") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+
+# UMAP percent.ribo
+FeaturePlot(mouse.unannotated,
+            reduction = "umap", 
+            features = "percent.ribo.protein") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+
+# UMAP percent.hb
+FeaturePlot(mouse.unannotated,
+            reduction = "umap", 
+            features = "percent.hb") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+
+# UMAP nCount
+FeaturePlot(mouse.unannotated,
+            reduction = "umap", 
+            features = "nCount_RNA") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+
+# UMAP nFeature
+FeaturePlot(mouse.unannotated,
+            reduction = "umap", 
+            features = "nFeature_RNA") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+
+# UMAP cell.complexity
+FeaturePlot(mouse.unannotated,
+            reduction = "umap", 
+            features = "cell.complexity") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+
+# UMAP Ttr expression
+FeaturePlot(mouse.unannotated,
+            reduction = "umap", 
+            features = "C1qb") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+```
+
+## Violins
+```{r}
+VlnPlot(mouse.unannotated,
+        features = "nCount_RNA",
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "nFeature_RNA",
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        stack = TRUE,
+        flip = TRUE,
+        features = c("C1qb","C1qa","Flt1","Myh11"),
+        split.by = "seurat_clusters")
+```
+
+## Cells per cluster
+```{r cells_per_cluster}
+# Cells per sample per cluster
+sample_ncells <- FetchData(mouse.unannotated, 
+                     vars = c("ident", "sample")) %>%
+  dplyr::count(ident,sample) %>%
+  tidyr::spread(ident, n)
+sample_ncells
+
+# Cells per isoform per cluster
+isoform_ncells <- FetchData(mouse.unannotated, 
+                     vars = c("ident", "isoform")) %>%
+  dplyr::count(ident,isoform) %>%
+  tidyr::spread(ident, n)
+isoform_ncells
+
+# Cells per sex per cluster
+sex_ncells <- FetchData(mouse.unannotated, 
+                     vars = c("ident", "sex")) %>%
+  dplyr::count(ident,sex) %>%
+  tidyr::spread(ident, n)
+sex_ncells
 ```
 
 # Finding markers
@@ -327,6 +438,7 @@ dev.off()
 ## Assign identities
 ```{r assign_identities}
 # Rename all identities
+Idents(mouse.unannotated) <- "seurat_clusters"
 mouse.annotated <- RenameIdents(object = mouse.unannotated,
                                 "0" = "Macrophages",         # Aoh
                                 "1" = "Endothelial",         # Dysf     

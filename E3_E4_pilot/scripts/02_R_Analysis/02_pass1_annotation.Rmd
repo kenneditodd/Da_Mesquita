@@ -65,7 +65,7 @@ mouse.unannotated
 ```{r pass1_unannotated_umap}
 cluster_colors <- c("black","gray40","gray","red1","blue","magenta1","darkorange2",
                     "darkorange4","yellow1","yellow4","yellow2","green","lightgreen",
-                    "chartreuse1","Aquamarine","cyan","SteelBlue","red4","forestgreen",
+                    "chartreuse1","aquamarine","cyan","steelblue","red4","forestgreen",
                     "purple1","purple4","orange","plum1","salmon","tan","chocolate4")
 u1 <- DimPlot(object = mouse.unannotated,
               reduction = "umap",
@@ -151,6 +151,9 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 VlnPlot(mouse.unannotated,
         features = "nFeature_RNA",
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "cell.complexity",
         split.by = "seurat_clusters")
 ```
 
@@ -606,7 +609,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 2: Endothelial 1
+## Cluster 2: Endothelial
 ```{r cluster2}
 VlnPlot(mouse.unannotated,
         features = cluster2$gene[1:20],
@@ -616,7 +619,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 3: Fibroblasts 1
+## Cluster 3: Fibroblasts
 ```{r cluster3}
 VlnPlot(mouse.unannotated,
         features = cluster3$gene[1:20],
@@ -626,7 +629,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 4: Macrophages
+## Cluster 4: Macrophages 2
 ```{r cluster4}
 VlnPlot(mouse.unannotated,
         features = cluster4$gene[1:20],
@@ -636,7 +639,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 5: Macrophages 2
+## Cluster 5: Macrophages 1
 ```{r cluster5}
 VlnPlot(mouse.unannotated,
         features = cluster5$gene[1:20],
@@ -656,7 +659,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 7: T cells 1
+## Cluster 7: T cells
 ```{r cluster7}
 VlnPlot(mouse.unannotated,
         features = cluster7$gene[1:20],
@@ -666,7 +669,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 8: Endothelial 2
+## Cluster 8: Endothelial
 ```{r cluster8}
 VlnPlot(mouse.unannotated,
         features = cluster8$gene[1:20],
@@ -676,7 +679,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 9: Endothelial 3
+## Cluster 9: Endothelial
 ```{r cluster9}
 VlnPlot(mouse.unannotated,
         features = cluster9$gene[1:20],
@@ -686,7 +689,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 10: B cells 1
+## Cluster 10: B cells
 ```{r cluster10}
 VlnPlot(mouse.unannotated,
         features = cluster10$gene[1:20],
@@ -696,7 +699,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 11: Endothelial 4
+## Cluster 11: Endothelial
 ```{r cluster11}
 VlnPlot(mouse.unannotated,
         features = cluster11$gene[1:20],
@@ -706,7 +709,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 12: Neutrophils 1
+## Cluster 12: Neutrophils
 ```{r cluster12}
 VlnPlot(mouse.unannotated,
         features = cluster12$gene[1:20],
@@ -726,7 +729,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 14: Neutrophils 2
+## Cluster 14: Neutrophils
 ```{r cluster14}
 VlnPlot(mouse.unannotated,
         features = cluster14$gene[1:20],
@@ -736,7 +739,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 15: ILCs 1
+## Cluster 15: ILCs
 ```{r cluster15}
 VlnPlot(mouse.unannotated,
         features = cluster15$gene[1:20],
@@ -746,7 +749,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 16: Fibroblasts 2
+## Cluster 16: Fibroblasts
 ```{r cluster16}
 VlnPlot(mouse.unannotated,
         features = cluster16$gene[1:20],
@@ -756,7 +759,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 17: T cells 2
+## Cluster 17: T cells
 ```{r cluster17}
 VlnPlot(mouse.unannotated,
         features = cluster17$gene[1:20],
@@ -766,7 +769,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 18: ILCs 2
+## Cluster 18: ILCs
 ```{r cluster18}
 VlnPlot(mouse.unannotated,
         features = cluster18$gene[1:20],
@@ -807,7 +810,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 22: B cells 2
+## Cluster 22: B cells
 ```{r cluster22}
 VlnPlot(mouse.unannotated,
         features = cluster22$gene[1:20],
@@ -817,7 +820,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 23: B cells 3
+## Cluster 23: B cells
 ```{r cluster23}
 VlnPlot(mouse.unannotated,
         features = cluster23$gene[1:20],
@@ -848,11 +851,11 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Merge cluster names
+# Assign Identities
 ```{r assign_merged_clusters}
 # Rename all identities
 mouse.annotated <- RenameIdents(object = mouse.unannotated,
-                                "0" = "Ambient/Macrophages?",
+                                "0" = "Unknown 1",
                                 "1" = "Macrophages 1",      
                                 "2" = "Endothelial",       
                                 "3" = "Fibroblasts",      
@@ -873,20 +876,21 @@ mouse.annotated <- RenameIdents(object = mouse.unannotated,
                                 "18" = "ILCs",
                                 "19" = "Schwann cells",
                                 "20" = "Mast cells",
-                                "21" = "Ambient RNAs?",
+                                "21" = "Unknown 2",
                                 "22" = "B cells",
                                 "23" = "B cells",
                                 "24" = "Myeloid precursors",
-                                "25" = "Ambient RNAs?")
+                                "25" = "Unknown 3")
 mouse.annotated$annotated_clusters <- Idents(mouse.annotated)
 Idents(mouse.annotated) <- "annotated_clusters"
 ```
 
+## Annotated UMAP
 ```{r annotated_umap_merged}
 # set colors
 cluster_colors <- c("firebrick1","blue","gold","orange","cyan","green","forestgreen",
-                    "darkorchid1","red3","gray","deeppink","chocolate4","black",
-                    "steelblue","pink")
+                    "darkorchid1","red3","gray","deeppink","chocolate4","tan",
+                    "steelblue","pink","black")
 
 # umap
 umap <- DimPlot(object = mouse.annotated, 
@@ -895,6 +899,13 @@ umap <- DimPlot(object = mouse.annotated,
         group.by = "annotated_clusters",
         cols = cluster_colors)
 umap
+
+DimPlot(object = mouse.annotated, 
+        reduction = "umap",
+        repel = TRUE,
+        dims = c(2,3),
+        group.by = "annotated_clusters",
+        cols = cluster_colors)
 ```
 
 ```{r save_annotated_umap, echo=FALSE, eval=FALSE}
@@ -910,11 +921,60 @@ remove(umap)
 saveRDS(mouse.annotated,"../../rObjects/pass1_annotated.rds")
 ```
 
-# Markers
+## Cluster tree
+- Cluster trees are helpful in deciding what clusters to merge. \
+```{r cluster_tree_unannotated, message=FALSE, warning=FALSE}
+mouse.annotated <- BuildClusterTree(object = mouse.annotated,
+                                     dims = 1:15, # min.pc in processing script
+                                     reorder = FALSE,
+                                     reorder.numeric = FALSE)
+tree <- mouse.annotated@tools$BuildClusterTree
+tree$tip.label <- paste0(tree$tip.label)
+
+ggtree::ggtree(tree, aes(x, y)) +
+  scale_y_reverse() +
+  ggtree::geom_tree() +
+  ggtree::theme_tree() +
+  ggtree::geom_tiplab(offset = 1) +
+  ggtree::geom_tippoint(color = cluster_colors[1:length(tree$tip.label)], shape = 16, size = 5) +
+  coord_cartesian(clip = 'off') +
+  theme(plot.margin = unit(c(0,2.5,0,0), 'cm'))
+```
+
+## Find markers
+## Automatically detect markers
+```{r run_presto_annotated}
+Idents(mouse.annotated) <- "annotated_clusters"
+all.markers <- SeuratWrappers::RunPrestoAll(
+  object = mouse.annotated,
+  assay = "RNA",
+  slot = "counts",
+  only.pos = TRUE
+)
+
+all.markers <- all.markers[all.markers$p_val_adj < 0.01,]
+
+top2 <- Reduce(rbind,
+               by(all.markers,
+                  all.markers["cluster"],
+                  head,
+                  n = 2))
+top20 <- Reduce(rbind,
+               by(all.markers,
+                  all.markers["cluster"],
+                  head,
+                  n = 20))
+
+write.table(all.markers, 
+            paste0(out, "markers/annotated_auto_find_markers_adjpval_0.01.tsv"),
+            quote = FALSE,
+            row.names = FALSE)
+```
+
+## Violin
 ```{r annotated_cluster_markers}
 v1 <- VlnPlot(mouse.annotated,
-        features = c("C1qb","Flt1","Col1a2","Itgax","Fgr","Cd3e","Cd19","Retnlg",
-                     "Il7r","Rgs5","Kit","Mpz","Sdc1","Ttr"),
+        features = top2$gene,
         split.by = "annotated_clusters",
         flip = TRUE,
         stack = TRUE,
@@ -933,6 +993,16 @@ v2 <- VlnPlot(mouse.annotated,
               cols = cluster_colors,
               features = goi)
 v2
+
+v3 <- VlnPlot(mouse.annotated,
+              group.by = "annotated_clusters",
+              split.by = "annotated_clusters",
+              stack = TRUE,
+              flip = TRUE,
+              cols = cluster_colors,
+              features = c("C1qa","C1qb","Flt1","Cldn5","Col1a1","Col1a2",
+                           "Myh11","Rgs5","Nkain2"))
+v3
 ```
 
 ```{r save_annotated_cluster_markers, eval=FALSE, echo=FALSE}
@@ -944,6 +1014,48 @@ pdf(paste0(out, "markers/sandro_markers_violin_annotated.pdf"), width = 12, heig
 v2
 dev.off()
 ```
+
+## Pseudobulk PCA
+- Each sample will have data points equal to the number of annotated_clusters
+```{r}
+# Step 1: Pseudo-bulk the counts based on sample and cell type
+pseudo <- AggregateExpression(
+    object = mouse.annotated, 
+    assays = "RNA", 
+    features = rownames(mouse.annotated),
+    return.seurat = TRUE, 
+    group.by = c("sample", "annotated_clusters")
+)
+
+# Step 2: Normalize the data
+pseudo <- NormalizeData(pseudo,
+                        normalization.method = "LogNormalize",
+                        scale.factor = 10000)
+
+# Step 3: Find variable features
+pseudo <- FindVariableFeatures(pseudo,
+                               selection.method = "vst", 
+                               nfeatures = 2000)
+
+# Step 4: Scale the data
+pseudo <- ScaleData(pseudo, 
+                    features = rownames(pseudo))
+
+# Step 5: Run PCA
+pseudo <- RunPCA(pseudo, 
+                 features = VariableFeatures(object = pseudo))
+
+# Step 6: Visualize PCA
+pca_colors <- c("firebrick1","cyan","gold","red3","blue","black","forestgreen",
+                    "darkorchid1","green","gray","deeppink","chocolate4","tan",
+                    "steelblue","pink","orange")
+DimPlot(pseudo, 
+        reduction = "pca",
+        group.by = "annotated_clusters",
+        cols = pca_colors,
+        pt.size = 3)
+```
+
 
 # Shiny App
 ```{r shiny_app, warning=FALSE, eval=FALSE}
