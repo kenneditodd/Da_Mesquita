@@ -887,6 +887,10 @@ Idents(mouse.annotated) <- "annotated_clusters"
 
 ## Annotated UMAP
 ```{r annotated_umap_merged}
+# set params
+DefaultAssay(mouse.annotated) <- "RNA"
+mouse.annotated <- NormalizeData(mouse.annotated)
+
 # set colors
 cluster_colors <- c("firebrick1","blue","gold","orange","cyan","green","forestgreen",
                     "darkorchid1","red3","gray","deeppink","chocolate4","tan",
@@ -1084,10 +1088,7 @@ makeShinyApp(obj = shiny.obj,
 
 # manual config edits
 sc1conf <- readRDS("shinyApp/sc1conf.rds")
-cluster_colors <- c("firebrick1","blue","gold","orange","cyan","green","forestgreen",
-                    "darkorchid1","red3","gray","deeppink","chocolate4","black",
-                    "steelblue","pink")
-sc1conf[2,4] <- "red|blue|gold|orange|cyan|green|forestgreen|darkorchid1|red3|gray|deeppink|chocolate4|black|steelblue|pink"
+sc1conf[2,4] <- "red|blue|gold|orange|cyan|green|forestgreen|darkorchid1|red3|gray|deeppink|chocolate4|tan|steelblue|pink|black"
 saveRDS(sc1conf, "shinyApp/sc1conf.rds")
 ```
 
