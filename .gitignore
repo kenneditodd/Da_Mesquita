@@ -10,6 +10,7 @@ PLX5622_diet/rObjects
 PLX5622_diet/scripts/*/logs
 
 # E3_E4_pilot
+E3_E4_pilot/cellbender
 E3_E4_pilot/counts
 E3_E4_pilot/refs/.env
 E3_E4_pilot/refs/example_output
