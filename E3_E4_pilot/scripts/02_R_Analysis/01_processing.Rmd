@@ -2,7 +2,7 @@
 title: "E3/E4 Mice Meningeal Dura scRNAseq"
 subtitle: "Filtering, Normalization, Clustering"
 author: "Kennedi Todd"
-date: "09/17/2024"
+date: "09/29/2024"
 output:
   html_document:
     theme: cerulean
@@ -30,28 +30,28 @@ located on most haematopoietic cells, positive selection of leukocytes \
   + E4_14M_M = APOE4 expressing; 14 months old; male \
 
 # Setup
-## Set working directory
-```{r working_directory}
+```{r working_directory, echo=FALSE}
 knitr::opts_knit$set(root.dir = ".")
 ```
 
 ## Load libraries
 ```{r libraries, warning=FALSE, message=FALSE}
 library(cowplot)     # plot_grid()
+library(dotenv)      # load_dot_env()
 library(dplyr)       # left_join()
 library(ggplot2)     # ggplot()
 library(gridExtra)   # grid.arrange()
 library(Matrix)      # rowSums()
 library(parallel)    # detectCores()
 library(rtracklayer) # import()
-library(scCustomize) # Merge_Seurat_List()
+library(scCustomize) # Read_CellBender_h5_Mat()
 library(Seurat)      # Read10X_h5()
 library(stringr)     # str_match()
 ```
 
 ## Variables and functions
 ```{r set_variables_thresholds_functions}
-# variables
+# user variables
 out <- "../../results/pass_1/all_clusters/"
 sample_order <- c("E3.M","E3.F","E4.M","E4.F")
 sample_colors <- c("#26946A","#1814A1","#EAC941","#DF5F00")
@@ -60,6 +60,10 @@ isoform_order <- c("E4","E3")
 isoform_colors <- c("darkgray","cornflowerblue")
 sex_order <- c("Male","Female")
 sex_colors <- c("darkgray","purple")
+
+# environment variables
+load_dot_env(file = "../../refs/.env")
+counts_dir <- Sys.getenv("COUNTS_DIR")
 
 # thresholds
 nCount.min <- 500
@@ -81,17 +85,18 @@ saveToPDF <- function(...) {
 # Load data
 ## Merge h5
 ```{r read_h5}
-prefix <- "../../counts/"
-suffix <- "/outs/filtered_feature_bc_matrix.h5"
-
-if (file.exists("../../rObjects/raw_h5.rds")) {
-  mouse <- readRDS("../../rObjects/raw_h5.rds")
+if (file.exists("../../rObjects/cellbender_h5.rds")) {
+  mouse <- readRDS("../../rObjects/cellbender_h5.rds")
 } else {
   # individual sample objects
-  E3.F <- CreateSeuratObject(Read10X_h5(paste0(prefix,"E3_14M_F",suffix)))
-  E3.M <- CreateSeuratObject(Read10X_h5(paste0(prefix,"E3_14M_M",suffix)))
-  E4.F <- CreateSeuratObject(Read10X_h5(paste0(prefix,"E4_14M_F",suffix)))
-  E4.M <- CreateSeuratObject(Read10X_h5(paste0(prefix,"E4_14M_M",suffix)))
+  E3.F <- CreateSeuratObject(
+    scCustomize::Read_CellBender_h5_Mat(paste0(counts_dir, "/E3_14M_F/outs/E3_14M_F_cellbender_filtered.h5")))
+  E3.M <- CreateSeuratObject(
+    scCustomize::Read_CellBender_h5_Mat(paste0(counts_dir, "/E3_14M_M/outs/E3_14M_M_cellbender_filtered.h5")))
+  E4.F <- CreateSeuratObject(
+    scCustomize::Read_CellBender_h5_Mat(paste0(counts_dir, "/E4_14M_F/outs/E4_14M_F_cellbender_filtered.h5")))
+  E4.M <- CreateSeuratObject(
+    scCustomize::Read_CellBender_h5_Mat(paste0(counts_dir, "/E4_14M_M/outs/E4_14M_M_cellbender_filtered.h5")))
 
   # merge objects
   mouse <- merge(x = E3.F, 
@@ -104,6 +109,9 @@ if (file.exists("../../rObjects/raw_h5.rds")) {
   saveRDS(mouse, "../../rObjects/raw_h5.rds")
 }
 
+# join layers
+mouse <- JoinLayers(mouse)
+
 # preview
 mouse
 ```
@@ -114,7 +122,7 @@ mouse
   + provider: GENCODE \
   + description: evidence-based annotation of the mouse genome (GRCm38), version M23 (Ensembl 98) \
 - Gm* genes are originally annotated by MGI and the *Rik genes are annotated by RIKEN \
-```{r read_annotation}
+```{r read_gtf}
 # read in annotation file, GENCODE GRCm38 version M23 (Ensembl 98)
 if (file.exists("../../rObjects/annotation.rds")) {
   genes <- readRDS("../../rObjects/annotation.rds")
@@ -133,9 +141,8 @@ if (file.exists("../../rObjects/annotation.rds")) {
 barcodes <- colnames(mouse)
 pattern <- "(.+)_[ACGT]+-(\\d+)"
 sample <- str_match(barcodes, pattern)[,2]
-table(sample)
+table(sample) # check
 mouse$sample <- factor(sample, levels = sample_order)
-table(mouse$sample)  # check
 Idents(mouse) <- mouse$sample
 
 # age column
@@ -164,7 +171,7 @@ mt.genes
 
 # percent.ribo
 # ribosomal proteins begin with 'Rps' or 'Rpl' in this annotation file
-# mitochondrial ribosomes start with 'Mrps' or 'Mrpl'
+# mitochondrial ribosomes start with 'Mrps' or 'Mrpl' (not on MT chromosome)
 gene.names <- genes$gene_name
 ribo <- gene.names[grep("^Rp[sl]", gene.names)]
 mt.ribo <- gene.names[grep("^Mrp[sl]", gene.names)]
@@ -172,7 +179,6 @@ ribo.combined <- c(mt.ribo,ribo)
 mouse$percent.ribo.protein <- PercentageFeatureSet(mouse, features = ribo.combined)
 ribo.combined
 
-# percent.hb
 # percent.hb - hemoglobin proteins begin with 'Hbb' or 'Hba' for mouse
 hb.genes <- gene.names[grep("^Hb[ba]-", gene.names)]
 mouse$percent.hb <- PercentageFeatureSet(mouse, features = hb.genes)
@@ -193,7 +199,7 @@ ncells1 <- ggplot(data, aes(x = sample, y = frequency, fill = sample)) +
             position=position_dodge(width=0.9), 
             vjust=-0.25) +
   scale_fill_manual(values = sample_colors) + 
-  scale_y_continuous(breaks = seq(0,12000, by = 2000), limits = c(0,12000)) +
+  scale_y_continuous(breaks = seq(0,15000, by = 5000), limits = c(0,15000)) +
   ggtitle("Raw: cells per sample") +
   theme(legend.position =  "none") + 
   theme(axis.text.x = element_text(angle = 45, hjust=1))
@@ -201,7 +207,7 @@ ncells1
 ```
 
 ## Density plots
-```{r prefiltering_density}
+```{r prefiltering_density, warning=FALSE}
 # Visualize nCount_RNA
 den1 <- ggplot(mouse@meta.data,
        aes(color = sample,
@@ -989,7 +995,6 @@ mouse.unannotated <- FindNeighbors(object = mouse.filtered,
 mouse.unannotated <- FindClusters(object = mouse.unannotated,
                                   algorithm = 1, # 1 = Louvain
                                   resolution = seq(0.1, 0.5, by=0.1))
-mouse.unannotated$seurat_clusters <- mouse.unannotated$SCT_snn_res.0.5
 ```
 
 ## Explore resolutions
@@ -1020,8 +1025,22 @@ DimPlot(mouse.unannotated,
         label = TRUE)
 ```
 
+## Choose resolution
+```{r choose_res}
+mouse.unannotated$seurat_clusters <- mouse.unannotated$SCT_snn_res.0.2
+
+DimPlot(mouse.unannotated,
+        group.by = "SCT_snn_res.0.2",
+        label = TRUE)
+
+DimPlot(mouse.unannotated,
+        group.by = "SCT_snn_res.0.2",
+        label = TRUE,
+        dims = c(2,3))
+```
+
 ```{r save_final_object,echo=FALSE,eval=FALSE}
 # Save seurat object
-saveRDS(mouse.unannotated, "../../rObjects/pass1_unannotated.rds")
+saveRDS(mouse.unannotated, "../../rObjects/unannotated_obj.rds")
 ```
 

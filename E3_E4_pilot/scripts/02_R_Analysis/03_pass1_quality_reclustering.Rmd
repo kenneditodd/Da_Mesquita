@@ -639,6 +639,14 @@ barcodes <- rownames(barcodes)
 saveRDS(barcodes, "../../rObjects/pass1_group1_cells_to_remove.rds")
 ```
 
+## Cellbender barcodes
+```{r cellbender_barcodes}
+cellbender_keep <- readRDS("../../rObjects/cellbender_kept_barcodes.rds")
+group1.annotated$cellbender <- colnames(group1.annotated) %in% cellbender_keep
+group1.annotated$cellbender <- gsub(TRUE, "keep", group1.annotated$cellbender)
+group1.annotated$cellbender <- gsub(FALSE, "remove", group1.annotated$cellbender)
+```
+
 ## Shiny app
 ```{r shiny_app_group1, eval=FALSE}
 # create new object
@@ -653,7 +661,7 @@ Idents(shiny.obj) <- "annotated_clusters"
 
 # create config
 names <- colnames(shiny.obj@meta.data)
-names <- names[c(24,25,2:23)]
+names <- names[c(24,25,26,2:23)]
 sc.config <- createConfig(obj = shiny.obj,
                           meta.to.include = names)
 
@@ -1267,6 +1275,14 @@ barcodes <- rownames(barcodes)
 saveRDS(barcodes, "../../rObjects/pass1_group2_cells_to_remove.rds")
 ```
 
+## Cellbender barcodes
+```{r cellbender_group2}
+cellbender_keep <- readRDS("../../rObjects/cellbender_kept_barcodes.rds")
+group2.annotated$cellbender <- colnames(group2.annotated) %in% cellbender_keep
+group2.annotated$cellbender <- gsub(TRUE, "keep", group2.annotated$cellbender)
+group2.annotated$cellbender <- gsub(FALSE, "remove", group2.annotated$cellbender)
+```
+
 ## Shiny app
 ```{r shiny_app_group2, eval=FALSE}
 # create new object
@@ -1282,7 +1298,7 @@ Idents(shiny.obj) <- "annotated_clusters"
 
 # create config
 names <- colnames(shiny.obj@meta.data)
-names <- names[c(24,25,2:23)]
+names <- names[c(24,25,26,2:23)]
 sc.config <- createConfig(obj = shiny.obj,
                           meta.to.include = names)
 
