@@ -2,20 +2,12 @@
 - **01_processing.Rmd**
   - This will read counts data, perform prefiltering QC, quality filtering, postfiltering QC, and clustering. 
   - By the end of this script you will have a seurat object with unannotated clusters.
-- **02_pass1_annotation.Rmd**
+- **02_annotation.Rmd**
   - Read in the unannotated seurat object from 01_preprocessing.Rmd and do in depth dive into cluster annotation.
-- **03_pass1_quality_reclustering.Rmd**
-  - In 02_pass1_annotation.Rmd there were a couple clusters that were difficult to annotate and could potentialy artifact clusters.
-  - This script reclusters groups of cells to 'untangle' clusters and identify true cells.
-  - The cell barcodes of the artifact clusters were saved to aid in subsetting in the next script.
-- **04_pass2_recluster_and_annotation.Rmd** 
-  - Artifcact cells are removed and remaining cells are reclustered and annotated.
-  - This creates a second, final, cleaned pass of the data with all cell types.
-- **05_pass2_QC_and_DE.Rmd**
-  - Peforms QC and differential expression on the annotated seurat object.
-- **06_pass2_subcluster.Rmd**
-  - Recluster specific cell types to identify subpopulations.
-- **07_pass2_endothelial_QC_and_DE.Rmd**
-  - Perform QC and differential expression on the reclustered endothelial cells created in 06_pass2_subcluster.Rmd. 
-- **08_pass2_macrophages_monocytes_QC_and_DE.Rmd**
-  - Perform QC and differential expression on the reclustered macrophages & monocytes created in 06_pass2_subcluster.Rmd. 
+- **03_QC_and_DE.Rmd**
+  - Quality control and differential expression of the annotated seurat object
+- **04_QC_and_DE_downsampled.Rmd**
+  - All samples downsampled to 3000 cells
+  - Quality control and differential expression of the annotated seurat object
+- **05_recluster_endothelial.Rmd**
+  - Recluster the endothelial population to identify subpopulations
