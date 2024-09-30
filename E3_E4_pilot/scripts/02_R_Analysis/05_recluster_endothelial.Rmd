@@ -1,0 +1,554 @@
+---
+title: "E3/E4 Mice Meningeal Dura scRNAseq"
+subtitle: "Recluster Endothelial Cells"
+author: "Kennedi Todd"
+date: "09/29/2024"
+output:
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_float: true
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Setup
+```{r working_directory, echo=FALSE}
+knitr::opts_knit$set(root.dir = ".")
+```
+
+## Libraries
+```{r libraries, message=FALSE, warning=FALSE}
+library(dplyr)        # ungroup()
+library(ggtree)       # BuildClusterTree()
+library(gridExtra)    # grid.arrange()
+library(gtools)       # smartbind()
+library(Matrix)       # rowSums()
+library(parallel)     # detectCores()
+library(plotly)       # plot_ly()
+library(Seurat)       # Idents()
+library(SeuratWrappers) # RunPrestoAll()
+library(ShinyCell)    # createConfig()
+library(tidyr)        # %>%
+```
+
+## Variables and functions
+```{r set_variables_and_thresholds}
+out <- "../../results/recluster_endothelial/"
+sample_order <- c("E3.M","E3.F","E4.M","E4.F")
+sample_colors <- c("#26946A","#1814A1","#EAC941","#DF5F00")
+sample_order2 <- c("Male E3", "Male E4", "Female E3", "Female E4")
+isoform_order <- c("E4","E3")
+isoform_colors <- c("darkgray","cornflowerblue")
+sex_order <- c("Male","Female")
+sex_colors <- c("darkgray","purple")
+```
+
+## Load data
+```{r read_pass1_all_clusters_annotated}
+# read data and set params
+mouse.annotated <- readRDS("../../rObjects/annotated_obj.rds")
+Idents(mouse.annotated) <- "annotated_clusters"
+DefaultAssay(mouse.annotated) <- "RNA"
+mouse.annotated <- NormalizeData(mouse.annotated)
+
+# set colors
+cluster_colors <- c("#B5B9BA", # Pericytes and SMCs
+                    "#40BBFF", # Endothelial
+                    "#a5d5a9", # B cells
+                    "#5dbd64", # Plasma cells
+                    "#1c7e24", # T and NK cells
+                    "#F57C7C", # ILCs
+                    "#E42622", # Dendritic cells
+                    "#FBB268", # Neutrophils
+                    "#FE8D19", # Macrophages
+                    "#A6CEE3", # Mast cells
+                    "#9D7BBA", # Fibroblasts
+                    "#977899") # Schwann cells
+
+# plot umap
+DimPlot(object = mouse.annotated,
+        reduction = "umap",
+        repel = TRUE,
+        group.by = "annotated_clusters",
+        cols = cluster_colors)
+```
+
+# Recluster endothelial
+## Subset and recluster
+```{r endo_subset_recluster}
+# subset to endothelial
+keepCells <- mouse.annotated@meta.data[,"annotated_clusters"] %in% "Endothelial"
+keepCol <- 4:14
+meta <- mouse.annotated@meta.data[keepCells,keepCol]
+counts <- LayerData(mouse.annotated, assay = "RNA", layer = "counts")[,keepCells]
+endo <- CreateSeuratObject(counts, 
+                             project = "Recluster Endothelial", 
+                             meta.data = meta)
+remove(meta,counts)
+
+# filter lowly expressed genes
+counts <- GetAssayData(object = endo, layer = "counts")
+nonzero <- counts > 0  # produces logical
+keep <- Matrix::rowSums(nonzero) >= 10  # sum the true/false
+counts.filtered <- counts[keep,] 
+
+# overwrite endo
+endo <- CreateSeuratObject(counts.filtered, meta.data = endo@meta.data)
+remove(counts,nonzero,keep,counts.filtered)
+
+# sctransform, pca, harmony
+endo[["RNA"]] <- split(endo[["RNA"]], f = endo$sample)
+endo <- SCTransform(endo, verbose = FALSE)
+endo <- RunPCA(endo, assay = "SCT")
+endo <- IntegrateLayers(object = endo,
+                          method = HarmonyIntegration,
+                          orig.reduction = "pca",
+                          assay = "SCT")
+
+# plot harmony
+DimPlot(endo,
+        group.by = "sample",
+        reduction = "harmony",
+        cols = sample_colors,
+        shuffle = TRUE)
+
+# find number of dims to include
+endo@reductions$harmony@stdev <-
+  apply(endo@reductions$harmony@cell.embeddings, 2, sd)
+ElbowPlot(endo,
+          reduction = "harmony") +
+  geom_vline(xintercept = 5, linetype = "dashed", color = "red")
+
+# umap
+endo <- RunUMAP(endo,
+                  dims = 1:5,
+                  reduction = "harmony",
+                  n.components = 3)
+DimPlot(endo)
+
+# classification
+endo <- FindNeighbors(object = endo,
+                        assay = "SCT",
+                        reduction = "harmony",
+                         dims = 1:5)   
+endo <- FindClusters(object = endo,
+                       algorithm = 1, # 1 = Louvain
+                       resolution = seq(0.1, 0.5,by = 0.1))
+endo$seurat_clusters <- endo$SCT_snn_res.0.1
+
+# cleanup env
+gc()
+```
+
+## Unannotated UMAP
+```{r endo_unannotated_umap}
+# set params
+DefaultAssay(endo) <- "RNA"
+endo <- JoinLayers(endo)
+endo <- NormalizeData(endo)
+Idents(endo) <- "seurat_clusters"
+
+# plot umaps
+cluster_colors <- c("red","gold","green","forestgreen","cyan","blue","purple","gray")
+u1 <- DimPlot(endo,
+              group.by = "seurat_clusters",
+              label = TRUE,
+              cols = cluster_colors)
+u1
+u2 <- DimPlot(endo,
+              group.by = "seurat_clusters",
+              label = TRUE,
+              dims = c(2,3),
+              cols = cluster_colors)
+u2
+```
+
+```{r save_endo_unannotated_umap, echo=FALSE, eval=FALSE}
+pdf(paste0(out, "UMAP/unannotated_clusters_dim1&2_umap.pdf"), width = 8, height = 6)
+u1
+dev.off()
+
+remove(u1,u2)
+saveRDS(endo, "../../rObjects/recluster_endo_unannotated.rds")
+```
+
+### Cells per cluster
+```{r endo_cells_per_cluster}
+# cells per cluster
+df1 <- as.data.frame(table(endo$seurat_clusters))
+colnames(df1) <- c("cluster","cell_count")
+write.table(df1,
+            file = paste0(out, "clustering_QC/cells_per_cluster_unannotated.tsv"),
+            quote = FALSE,
+            row.names = FALSE,
+            sep = "\t")
+
+# cells per cluster per sample
+df2 <- endo@meta.data |> select(seurat_clusters, sample) |>
+  group_by(seurat_clusters, sample) |> count() |>
+  tidyr::pivot_wider(names_from = sample, values_from = n)
+write.table(x = df2,
+            file = paste0(out, "clustering_QC/cells_per_cluster_per_sample_unannotated.tsv"),
+            sep = "\t",
+            quote = FALSE,
+            row.names = FALSE)
+remove(df1,df2)
+```
+
+### Feature plots
+```{r endo_feature_plots, message=FALSE, warning=FALSE}
+# UMAP percent.mt
+f1 <- FeaturePlot(endo,
+                  reduction = "umap",
+                  features = "percent.mt") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f1
+
+# UMAP percent.ribo
+f2 <- FeaturePlot(endo,
+                  reduction = "umap",
+                  features = "percent.ribo.protein") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f2
+
+# UMAP percent.hb
+f3 <- FeaturePlot(endo,
+                  reduction = "umap", 
+                  features = "percent.hb") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f3
+
+# UMAP nCount
+f4 <- FeaturePlot(endo,
+                  reduction = "umap", 
+                  features = "nCount_RNA") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f4
+
+# UMAP nFeature
+f5 <- FeaturePlot(endo,
+                  reduction = "umap", 
+                  features = "nFeature_RNA") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f5
+
+# UMAP cell.complexity
+f6 <- FeaturePlot(endo,
+                  reduction = "umap", 
+                  features = "cell.complexity") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f6
+
+# UMAP percent.ribo
+f7 <- FeaturePlot(endo,
+                  reduction = "umap", 
+                  features = "percent.ribo.protein") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+f7
+
+f7 <- FeaturePlot(endo,
+                  reduction = "umap", 
+                  features = c("Cldn5","Kdr","Vwf"))
+f7
+```
+
+```{r save_endo_feature_plots, eval=FALSE, echo=FALSE}
+path <- paste0(out, "clustering_QC/heatmap_umap_")
+pdf(paste0(path, "percent_mito.pdf"), width = 8, height = 6)
+f1
+dev.off()
+
+pdf(paste0(path, "percent_ribo_protein.pdf"), width = 8, height = 6)
+f2
+dev.off()
+
+pdf(paste0(path, "percent_hb.pdf"), width = 8, height = 6)
+f3
+dev.off()
+
+pdf(paste0(path, "nCount.pdf"), width = 8, height = 6)
+f4
+dev.off()
+
+pdf(paste0(path, "nFeature.pdf"), width = 8, height = 6)
+f5
+dev.off()
+
+pdf(paste0(path, "cell_complexity.pdf"), width = 8, height = 6)
+f6
+dev.off()
+
+pdf(paste0(path, "percent_ribo.pdf"), width = 8, height = 6)
+f7
+dev.off()
+
+
+remove(f1,f2,f3,f4,f5,f6,f7)
+```
+
+### Dim plot
+```{r endo_dim_plot}
+d1 <- DimPlot(endo,
+              group.by = "sample",
+              shuffle = TRUE,
+              raster = FALSE,
+              cols = sample_colors)
+d1
+
+d2 <- DimPlot(endo,
+              split.by = "sample",
+              group.by = "seurat_clusters",
+              ncol = 2,
+              cols = cluster_colors,
+              shuffle = TRUE,
+              raster = FALSE)
+d2
+
+d3 <- DimPlot(endo,
+              split.by = "sex",
+              group.by = "seurat_clusters",
+              ncol = 2,
+              cols = cluster_colors,
+              shuffle = TRUE,
+              raster = FALSE)
+d3
+
+d4 <- DimPlot(endo,
+              group.by = "sex",
+              cols = c("green","purple"),
+              shuffle = TRUE,
+              raster = FALSE)
+d4
+
+d5 <- DimPlot(endo,
+              split.by = "isoform",
+              group.by = "seurat_clusters",
+              ncol = 2,
+              cols = cluster_colors,
+              shuffle = TRUE,
+              raster = FALSE)
+d5
+
+d6 <- DimPlot(endo,
+              group.by = "isoform",
+              cols = c("blue","red"),
+              shuffle = TRUE,
+              raster = FALSE)
+d6
+```
+
+```{r save_endo_dim_plot}
+pdf(paste0(out, "clustering_QC/umap_colored_by_sample.pdf"), width = 8, height = 6)
+d1
+dev.off()
+
+pdf(paste0(out, "clustering_QC/umap_split_by_sample.pdf"), width = 8, height = 6)
+d2
+dev.off()
+
+pdf(paste0(out, "clustering_QC/umap_split_by_sex.pdf"), width = 8, height = 6)
+d3
+dev.off()
+
+pdf(paste0(out, "clustering_QC/umap_colored_by_sex.pdf"), width = 8, height = 6)
+d4
+dev.off()
+
+pdf(paste0(out, "clustering_QC/umap_split_by_isoform.pdf"), width = 8, height = 6)
+d5
+dev.off()
+
+pdf(paste0(out, "clustering_QC/umap_colored_by_isoform.pdf"), width = 8, height = 6)
+d6
+dev.off()
+
+remove(d1,d2,d3,d4,d5,d6)
+```
+
+### Find markers
+```{r endo_auto_find_markers}
+# auto find markers
+Idents(endo) <- "seurat_clusters"
+markers <- SeuratWrappers::RunPrestoAll(
+  object = endo,
+  assay = "RNA",
+  slot = "counts",
+  only.pos = FALSE
+)
+
+# filter by adjusted p-value
+markers <- markers[markers$p_val_adj < 0.01,]
+
+# subset to top 5 and top 20 genes
+top5 <- Reduce(rbind,
+               by(markers,
+                  markers["cluster"],
+                  head,
+                  n = 5))
+top10 <- Reduce(rbind,
+               by(markers,
+                  markers["cluster"],
+                  head,
+                  n = 10))
+```
+
+```{r save_endo_auto_markers,echo=FALSE,eval=FALSE}
+write.table(markers, 
+            paste0(out, "markers/auto_find_markers_adjpval_0.01_unannotated.tsv"),
+            quote = FALSE,
+            sep = "\t",
+            row.names = FALSE)
+```
+
+### Marker violins
+```{r endo_marker_violins}
+# set params
+Idents(endo) <- "seurat_clusters"
+endo <- NormalizeData(endo)
+DefaultAssay(endo) <- "RNA"
+
+# plot auto top 3 markers
+v1 <- VlnPlot(endo,
+              group.by = "seurat_clusters",
+              split.by = "seurat_clusters",
+              stack = TRUE,
+              flip = TRUE,
+              cols = cluster_colors,
+              features = top5$gene)
+v1
+
+# plot Sandro's markers
+goi <- c("Pdgfrb","Acta2","Vwf","Cldn5","Pecam1","Flt4","Prox1","Lyve1","Ptprc",
+         "Cd19","Ms4a1","Ighd","Cd3e","Trbc2","Il7r","Nkg7","Klrb1b","Klrb1c",
+         "Gata3","Rora","Itgax","H2-Eb1","Ccr2","Ly6c2","Lyz2","Ly6g","Itgam",
+         "Mrc1","Csf1r","Cd38","Mki67","Mcpt4","Ms4a2","Col1a2","Plp1")
+v2 <- VlnPlot(endo,
+              group.by = "seurat_clusters",
+              split.by = "seurat_clusters",
+              stack = TRUE,
+              flip = TRUE,
+              cols = cluster_colors,
+              features = goi)
+v2
+
+v3 <- VlnPlot(endo,
+              group.by = "seurat_clusters",
+              split.by = "seurat_clusters",
+              stack = TRUE,
+              flip = TRUE,
+              cols = cluster_colors,
+              features = c("Vwf","Cldn5","Kdr","Flt4"))
+v3
+```
+
+```{r save_endo_marker_violins, echo=FALSE, eval=FALSE}
+pdf(paste0(out, "markers/auto_top5_markers_violin_unannotated.pdf"), width = 6, height = 10)
+v1
+dev.off()
+
+pdf(paste0(out, "markers/sandro_markers_violin_unannotated.pdf"), width = 6, height = 10)
+v2
+dev.off()
+```
+
+
+### Assign identities
+```{r assign_endo_idents, eval=FALSE}
+# Rename all identities
+Idents(endo) <- "seurat_clusters"
+endo.annotated <- RenameIdents(object = endo,
+                                "0" = "Col4a2-high",
+                                "1" = "Vwf+ ",    
+                                "2" = "Col4a2-high",     
+                                "3" = "Vwf+ Lef1+ ",      
+                                "4" = "Col4a2-high Mannr+",
+                                "5" = "Col4a2-high Mrc1+")
+endo.annotated$annotated_clusters <- Idents(endo.annotated)
+Idents(endo.annotated) <- "annotated_clusters"
+```
+
+## Annotated UMAP
+```{r endo_annotated_umap, eval=FALSE}
+# set colors
+cluster_colors <- c("red","green","gold","blue","gray")
+
+# umap
+umap <- DimPlot(object = endo.annotated, 
+        reduction = "umap",
+        repel = TRUE,
+        group.by = "annotated_clusters",
+        cols = cluster_colors)
+umap
+```
+
+```{r save_endo_annotated_umap, echo=FALSE, eval=FALSE}
+path <- paste0(out, "UMAP/annotated_clusters_dim1&2_umap.pdf")
+pdf(path, width = 6, height = 4)
+umap
+dev.off()
+```
+
+```{r save_endo_annotated_object,echo=FALSE,eval=FALSE}
+# save object
+saveRDS(endo.annotated,"../../rObjects/recluster_endo_annotated.rds")
+remove(endo,umap)
+```
+
+### Cells per cluster
+```{r endo_annotated_cells_per_cluster}
+# cells per cluster
+df1 <- as.data.frame(table(endo.annotated$annotated_clusters))
+colnames(df1) <- c("cluster","cell_count")
+write.table(df1,
+            file = paste0(out, "clustering_QC/cells_per_cluster_annotated.tsv"),
+            quote = FALSE,
+            row.names = FALSE,
+            sep = "\t")
+
+# cells per cluster per sample
+df2 <- endo.annotated@meta.data |> select(annotated_clusters, sample) |>
+  group_by(annotated_clusters, sample) |> count() |>
+  tidyr::pivot_wider(names_from = sample, values_from = n)
+write.table(x = df2,
+            file = paste0(out, "clustering_QC/cells_per_cluster_per_sample_annotated.tsv"),
+            sep = "\t",
+            quote = FALSE,
+            row.names = FALSE)
+remove(df1,df2)
+```
+
+## Shiny app
+```{r shiny_app_endo, eval=FALSE}
+# create new object
+shiny.obj <- endo.annotated
+VariableFeatures(shiny.obj) <- shiny.obj@assays$SCT@var.features
+
+# set default params
+DefaultAssay(shiny.obj) <- "RNA"
+Idents(shiny.obj) <- "annotated_clusters"
+
+# create config
+names <- colnames(shiny.obj@meta.data)
+names <- names[c(22,23,2:21)]
+sc.config <- createConfig(obj = shiny.obj,
+                          meta.to.include = names)
+
+# change wd
+setwd(out)
+
+# output shiny app folder
+makeShinyApp(obj = shiny.obj, 
+             scConf = sc.config, 
+             gene.mapping = TRUE,
+             shiny.title = "Recluster Endothelial Cells")
+
+# manual config edits
+sc1conf <- readRDS("shinyApp/sc1conf.rds")
+sc1conf[2,4] <- "red|green|gold|blue|gray"
+saveRDS(sc1conf, "shinyApp/sc1conf.rds")
+
+# cleanup
+remove(sc.config,sc1conf,shiny.obj)
+gc()
+```
