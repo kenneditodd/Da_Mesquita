@@ -436,12 +436,28 @@ mouse.filtered <- CreateSeuratObject(counts.filtered,
 print(paste0(dim(counts)[1] - dim(counts.filtered)[1], " features removed"))
 ```
 
-Remove highly abundant mitochondrial transcripts.
+Remove highly abundant transcripts.
 ```{r remove_specific_genes}
 # remove mt.genes
 counts <- GetAssayData(object = mouse.filtered, layer = "counts")
 keep <- !rownames(counts) %in% mt.genes # false when mt.gene
 counts.filtered <- counts[keep,]
+
+# remove ribo.genes
+keep <- !rownames(counts.filtered) %in% ribo.combined
+counts.filtered <- counts.filtered[keep,]
+
+# remove Ig genes + Jchain but keep Igha + Ighd to enahnce clustering
+gene.types <- c("IG_C_gene","IG_C_pseudogene","IG_D","IG_J_gene","IG_LV_gene",
+                "IG_V_gene","IG_V_pseudogene")
+keep <- (genes$gene_type) %in% gene.types
+ig.genes <- genes[keep,]
+ig.genes <- c(ig.genes$gene_name, "Jchain")
+ig.genes <- ig.genes[-c(185,192)] # keep Igha and Ighd
+ig.genes <- ig.genes[!ig.genes %in% c("Igha","Ighd")]
+ig.genes
+keep <- !rownames(counts.filtered) %in% ig.genes
+counts.filtered <- counts.filtered[keep,]
 
 # overwrite mouse.filtered
 mouse.filtered <- CreateSeuratObject(counts.filtered,
@@ -496,7 +512,7 @@ remove(ncells1,ncells2,plots,layout,grid,data)
 ```
 
 ## Density plots
-```{r postfiltering_density}
+```{r postfiltering_density, warning=FALSE}
 # Visualize nCount_RNA
 den1 <- ggplot(mouse.filtered@meta.data,
        aes(color = sample,
@@ -833,7 +849,6 @@ e1 <- ElbowPlot(mouse.filtered) +
 e1
 ```
 
-
 ```{r save_pca,echo=FALSE,eval=FALSE,message=FALSE,warning=FALSE}
 # save pca1
 path <- paste0(out, "clustering_QC/PCA_split_by_sample.pdf")
@@ -920,7 +935,6 @@ e1 <- ElbowPlot(mouse.filtered,
   geom_vline(xintercept = 15, linetype = "dashed", color = "red")
 e1
 ```
-
 
 ```{r save_harmony,echo=FALSE,eval=FALSE,message=FALSE,warning=FALSE}
 # save hrm1
@@ -1039,8 +1053,7 @@ DimPlot(mouse.unannotated,
         dims = c(2,3))
 ```
 
-```{r save_final_object,echo=FALSE,eval=FALSE}
+```{r save_final_object, echo=FALSE, eval=FALSE}
 # Save seurat object
 saveRDS(mouse.unannotated, "../../rObjects/unannotated_obj.rds")
 ```
-
