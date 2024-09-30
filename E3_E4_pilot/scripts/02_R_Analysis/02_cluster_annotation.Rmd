@@ -1,0 +1,996 @@
+---
+title: "E3/E4 Mice Meningeal Dura scRNAseq"
+subtitle: "Annotation"
+author: "Kennedi Todd"
+date: "09/29/2024"
+output:
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_float: true
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Setup
+## Notes
+- Cell suspensions of meningeal dura enriched by MACS for cells expressing Cd45, Cd31, and Lyve-1 \
+  + Cd45/Ptprc/B220/Ly-5/Lyt-4/T200: transmembrane protein tyrosine phosphatase, 
+located on most haematopoietic cells, positive selection of leukocytes \
+  + Cd31/Pecam1: adhesion and signaling receptor that is expressed on endothelial and hematopoietic cells, positive selection of endothelial cells \
+  + Lyve1/1200012G08Rik/Lyve-1/Xlkd1/lymphatic vessel endothelial HA receptor-1: found primarily on lymphatic endothelial cells \
+
+```{r working_directory, echo=FALSE}
+knitr::opts_knit$set(root.dir = ".")
+```
+
+## Libraries
+```{r libraries, message=FALSE, warning=FALSE}
+library(dplyr)          # ungroup()
+library(ggtree)         # BuildClusterTree()
+library(gridExtra)      # grid.arrange()
+library(gtools)         # smartbind()
+library(parallel)       # detectCores()
+library(plotly)         # plot_ly()
+library(Seurat)         # Idents()
+library(SeuratWrappers) # RunPrestoAll()
+library(ShinyCell)      # createConfig()
+library(tidyr)          # %>%
+```
+
+## Variables
+```{r set_variables_and_thresholds}
+out <- "../../results/pass_1/all_clusters/"
+sample_order <- c("E3.M","E3.F","E4.M","E4.F")
+sample_colors <- c("#26946A","#1814A1","#EAC941","#DF5F00")
+sample_order2 <- c("Male E3", "Male E4", "Female E3", "Female E4")
+isoform_order <- c("E4","E3")
+isoform_colors <- c("darkgray","cornflowerblue")
+sex_order <- c("Male","Female")
+sex_colors <- c("darkgray","purple")
+```
+
+## Read data
+```{r read_object}
+mouse.unannotated <- readRDS("../../rObjects/unannotated_obj.rds")
+Idents(mouse.unannotated) <- "seurat_clusters"
+DefaultAssay(mouse.unannotated) <- "RNA"
+mouse.unannotated <- NormalizeData(mouse.unannotated)
+
+mouse.unannotated
+```
+
+# Unannotated QC
+## UMAP
+```{r pass1_unannotated_umap}
+cluster_colors <- c("red4","red","orange","gold","lightgreen","chartreuse3","darkgreen",
+                    "cyan","steelblue","blue","deeppink","pink","purple","tan","chocolate4",
+                    "gray","black")
+u1 <- DimPlot(object = mouse.unannotated,
+              reduction = "umap",
+              shuffle = TRUE,
+              repel = TRUE,
+              raster = FALSE,
+              cols = cluster_colors,
+              label = TRUE)
+u1
+
+u2 <- DimPlot(object = mouse.unannotated,
+              reduction = "umap",
+              shuffle = TRUE,
+              repel = TRUE,
+              dims = c(2,3),
+              cols = cluster_colors,
+              label = TRUE)
+u2
+```
+
+```{r save_pass1_unannotated_umap, echo=FALSE, eval=FALSE}
+path <- paste0(out, "UMAP/unannotated_clusters_dim1&2.pdf")
+pdf(path, width = 6, height = 4)
+u1
+dev.off()
+
+path <- paste0(out, "UMAP/unannotated_clusters_dim2&3.pdf")
+pdf(path, width = 6, height = 4)
+u2
+dev.off()
+
+remove(u1,u2)
+```
+
+## Feature plots
+```{r feature_plots_unannotated, message=FALSE, warning=FALSE}
+# UMAP percent.mt
+FeaturePlot(mouse.unannotated,
+            reduction = "umap", 
+            features = "percent.mt") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+
+# UMAP percent.ribo
+FeaturePlot(mouse.unannotated,
+            reduction = "umap", 
+            features = "percent.ribo.protein") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+
+# UMAP percent.hb
+FeaturePlot(mouse.unannotated,
+            reduction = "umap", 
+            features = "percent.hb") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+
+# UMAP nCount
+FeaturePlot(mouse.unannotated,
+            reduction = "umap", 
+            features = "nCount_RNA") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+
+# UMAP nFeature
+FeaturePlot(mouse.unannotated,
+            reduction = "umap", 
+            features = "nFeature_RNA") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+
+# UMAP cell.complexity
+FeaturePlot(mouse.unannotated,
+            reduction = "umap", 
+            features = "cell.complexity") + 
+  scale_colour_gradientn(colours = c("blue","lightblue","yellow","orange","red"))
+```
+
+## Violins
+```{r violin_qc_unannotated}
+VlnPlot(mouse.unannotated,
+        features = "nCount_RNA",
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "nFeature_RNA",
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "cell.complexity",
+        split.by = "seurat_clusters")
+```
+
+## Cells per cluster
+```{r cells_per_cluster}
+# Cells per sample per cluster
+sample_ncells <- FetchData(mouse.unannotated, 
+                     vars = c("ident", "sample")) %>%
+  dplyr::count(ident,sample) %>%
+  tidyr::spread(ident, n)
+sample_ncells
+
+# Cells per isoform per cluster
+isoform_ncells <- FetchData(mouse.unannotated, 
+                     vars = c("ident", "isoform")) %>%
+  dplyr::count(ident,isoform) %>%
+  tidyr::spread(ident, n)
+isoform_ncells
+
+# Cells per sex per cluster
+sex_ncells <- FetchData(mouse.unannotated, 
+                     vars = c("ident", "sex")) %>%
+  dplyr::count(ident,sex) %>%
+  tidyr::spread(ident, n)
+sex_ncells
+```
+
+## Gene histogram
+```{r histogram}
+# User params
+goi <- "Malat1"
+threshold <- 1
+
+# Subset data
+log2.threshold <- log2(threshold + 0.01)
+counts.df <- FetchData(mouse.unannotated, vars = goi)
+colnames(counts.df) <- "counts"
+log2.counts.df <- log2(counts.df + 0.01)
+
+# Histogram
+title <- paste0(goi, "\nnCount_RNA > ", threshold)
+hist1 <- ggplot(counts.df, aes(x = counts)) + 
+  geom_histogram(bins = 100, fill = "gray", color = "black") + 
+  labs(title = title, x=NULL, y=NULL) +
+  xlab(paste0(goi, " nCount_RNA")) + ylab("# of Samples") + theme_bw() +
+  geom_vline(xintercept = threshold, col = "blue") +
+  annotate("rect", 
+           xmin = -Inf,
+           xmax = threshold, 
+           ymin = 0, 
+           ymax=Inf, 
+           alpha=0.2, 
+           fill="chocolate4") +
+  annotate("rect", 
+           xmin = threshold,
+           xmax = Inf, 
+           ymin = 0, 
+           ymax=Inf, 
+           alpha=0.2, 
+           fill="deepskyblue")
+
+# Histogram log transformed
+hist2 <- ggplot(log2.counts.df, aes(x = counts)) + 
+  geom_histogram(bins = 100, fill = "gray", color = "black") + 
+  labs(title = title, x=NULL, y=NULL) +
+  xlab(paste0("Log2(",goi, " nCount_RNA)")) + ylab("# of Samples") + theme_bw() +
+  geom_vline(xintercept = log2.threshold, col = "blue") +
+  annotate("rect", 
+           xmin = -Inf,
+           xmax = log2.threshold, 
+           ymin = 0, 
+           ymax=Inf, 
+           alpha=0.2, 
+           fill="chocolate4") +
+  annotate("rect", 
+           xmin = log2.threshold,
+           xmax = Inf, 
+           ymin = 0, 
+           ymax=Inf, 
+           alpha=0.2, 
+           fill="deepskyblue")
+
+# plot
+plots1 <- list(hist1,hist2)
+layout1 <- rbind(c(1),c(2))
+grid1 <- grid.arrange(grobs = plots1, layout_matrix = layout1)
+```
+
+## Percent gene
+```{r percent_gene}
+# user define variable
+goi <- "Malat1"
+
+# Extract counts data
+DefaultAssay(mouse.unannotated) <- "RNA"
+Idents(mouse.unannotated) <- "seurat_clusters"
+geneData <- FetchData(mouse.unannotated,
+                      vars = goi,
+                      slot = "counts")
+geneData <- geneData > 1
+table(geneData)
+mouse.unannotated$Expression <- geneData
+
+FetchData(mouse.unannotated,
+          vars = c("ident", "Expression")) %>%
+  dplyr::count(ident, Expression) %>%
+  tidyr::spread(ident, n)
+
+# Plot
+mouse.unannotated@meta.data %>%
+  group_by(seurat_clusters, Expression) %>%
+  dplyr::count() %>%
+  group_by(seurat_clusters) %>%
+  dplyr::mutate(percent = 100*n/sum(n)) %>%
+  ungroup() %>%
+  ggplot(aes(x=seurat_clusters,y=percent, fill=Expression)) +
+  geom_col() +
+  ggtitle(paste0("Percentage of cells with > 1 counts for ", goi)) +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+## Cluster tree
+- Cluster trees are helpful in deciding what clusters to merge. \
+```{r cluster_tree_unannotated, message=FALSE, warning=FALSE}
+mouse.unannotated <- BuildClusterTree(object = mouse.unannotated,
+                                     dims = 1:15,
+                                     reorder = FALSE,
+                                     reorder.numeric = FALSE)
+tree <- mouse.unannotated@tools$BuildClusterTree
+tree$tip.label <- paste0(tree$tip.label)
+
+ggtree::ggtree(tree, aes(x, y)) +
+  scale_y_reverse() +
+  ggtree::geom_tree() +
+  ggtree::theme_tree() +
+  ggtree::geom_tiplab(offset = 1) +
+  ggtree::geom_tippoint(color = cluster_colors[1:length(tree$tip.label)], shape = 16, size = 5) +
+  coord_cartesian(clip = 'off') +
+  theme(plot.margin = unit(c(0,2.5,0,0), 'cm'))
+```
+
+# Potential Markers
+## MACS markers
+- Ptprc - located on most haematopoietic cells, positive selection of leukocytes \
+- Pecam1 - adhesion and signaling receptor that is expressed on endothelial 
+and hematopoietic cells, positive selection of endothelial cells \
+- Lyve1 - found primarily on lymphatic endothelial cells \
+```{r macs_markers}
+VlnPlot(mouse.unannotated,
+        features = "Ptprc",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "Lyve1",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "Pecam1",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+```
+
+## B-cells / Plasma cells
+- Cd19: expressed in B-cells and follicular dendritic cells \
+- Fcrla: a B-cell specific protein in mice \
+- Cd79a & Cd79b: together form BCR complex \
+- Sdc1: Plasma cells \
+```{r bcells}
+VlnPlot(mouse.unannotated,
+        features = "Cd19",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "Fcrla",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "Cd79a",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "Cd79b",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "Sdc1",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+```
+
+## T-cells
+- Trac/Cd3d/Cd3e/Cd3g are components of the TCR \
+```{r tcells}
+VlnPlot(mouse.unannotated,
+        features = "Trac",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "Cd3e",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "Cd8a",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "Cd4",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+```
+
+## Endothelial cells
+```{r endothelial}
+VlnPlot(mouse.unannotated,
+        features = "Ly6c1",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "Flt1",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+```
+
+## Fibroblasts
+```{r fibroblasts}
+VlnPlot(mouse.unannotated,
+        features = "Col1a1",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "Col1a2",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+```
+
+## Mast cells
+```{r mast_cells}
+VlnPlot(mouse.unannotated,
+        features = "Fcer1a",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "Kit", # aka Cd117
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+```
+
+## Macrophage
+```{r macrophage}
+VlnPlot(mouse.unannotated,
+        features = "C1qa",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "C1qb",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "Mki67",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+```
+
+## Monocytes/DCs
+- Cd11c/Itgax: Monocytes & DCs
+```{r monocytes_DCs}
+VlnPlot(mouse.unannotated,
+        features = "Itgax", # Cd11c
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "Cd209a",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+```
+
+## Neutrophils
+```{r neutrophils}
+VlnPlot(mouse.unannotated,
+        features = "Ly6g",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "Retnlg",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+```
+
+## Pericytes & SMCs
+```{r pericytes_smcs}
+VlnPlot(mouse.unannotated,
+        features = "Acta2",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "Myl9",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "Rgs5",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+```
+
+## Schwann cells
+```{r schwann_cells}
+VlnPlot(mouse.unannotated,
+        features = "Cdh19",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+VlnPlot(mouse.unannotated,
+        features = "Mpz",
+        cols = cluster_colors,
+        split.by = "seurat_clusters")
+```
+
+## Sandro's markers
+```{r sandros_markers}
+Idents(mouse.unannotated) <- "seurat_clusters"
+goi <- c("Pdgfrb","Acta2","Vwf","Cldn5","Pecam1","Flt4","Prox1","Lyve1","Ptprc",
+         "Cd19","Ms4a1","Ighd","Cd3e","Trbc2","Il7r","Nkg7","Klrb1b","Klrb1c",
+         "Gata3","Rora","Itgax","H2-Eb1","Ccr2","Ly6c2","Lyz2","Ly6g","Itgam",
+         "Mrc1","Csf1r","Cd38","Mki67","Mcpt4","Ms4a2","Col1a2","Plp1")
+
+v1 <- VlnPlot(mouse.unannotated,
+              features = goi,
+              cols = cluster_colors,
+              split.by = "seurat_clusters",
+              flip = TRUE,
+              stack = TRUE)
+v1
+```
+
+## Automatically detect markers
+```{r run_presto}
+# auto find markers
+Idents(mouse.unannotated) <- "seurat_clusters"
+all.markers <- SeuratWrappers::RunPrestoAll(
+  object = mouse.unannotated,
+  assay = "RNA",
+  slot = "counts",
+  only.pos = TRUE
+)
+
+# filter based on p_val_adj
+all.markers <- all.markers[all.markers$p_val_adj < 0.01,]
+
+# subset table to top 2 and top 20 markers
+top2 <- Reduce(rbind,
+               by(all.markers,
+                  all.markers["cluster"],
+                  head,
+                  n = 2))
+top20 <- Reduce(rbind,
+               by(all.markers,
+                  all.markers["cluster"],
+                  head,
+                  n = 20))
+
+# plot violin
+v1 <- VlnPlot(mouse.unannotated,
+        features = top2$gene,
+        split.by = "seurat_clusters",
+        flip = TRUE,
+        stack = TRUE,
+        cols = cluster_colors)
+v1
+
+# save table
+write.table(all.markers, 
+            paste0(out, "markers/unannotated_auto_find_markers_adjpval_0.01.tsv"),
+            quote = FALSE,
+            row.names = FALSE)
+```
+
+```{r save_auto_markers_unannotated_violin, echo=FALSE, eval=FALSE}
+pdf(paste0(out, "markers/auto_markers_violin_unannotated.pdf"), width = 8, height = 8)
+v1
+dev.off()
+remove(v1)
+```
+
+
+```{r subset_all_markers}
+# compare 
+table(all.markers$cluster)
+
+# subset based on cluster
+cluster0 <- all.markers[all.markers$cluster == 0,]
+cluster1 <- all.markers[all.markers$cluster == 1,]
+cluster2 <- all.markers[all.markers$cluster == 2,]
+cluster3 <- all.markers[all.markers$cluster == 3,]
+cluster4 <- all.markers[all.markers$cluster == 4,]
+cluster5 <- all.markers[all.markers$cluster == 5,]
+cluster6 <- all.markers[all.markers$cluster == 6,]
+cluster7 <- all.markers[all.markers$cluster == 7,]
+cluster8 <- all.markers[all.markers$cluster == 8,]
+cluster9 <- all.markers[all.markers$cluster == 9,]
+cluster10 <- all.markers[all.markers$cluster == 10,]
+cluster11 <- all.markers[all.markers$cluster == 11,]
+cluster12 <- all.markers[all.markers$cluster == 12,]
+cluster13 <- all.markers[all.markers$cluster == 13,]
+cluster14 <- all.markers[all.markers$cluster == 14,]
+cluster15 <- all.markers[all.markers$cluster == 15,]
+cluster16 <- all.markers[all.markers$cluster == 16,]
+```
+
+# Cluster Annotations
+## Cluster 0: Endothelial
+```{r cluster0}
+VlnPlot(mouse.unannotated,
+        features = cluster0$gene[1:20],
+        cols = cluster_colors,
+        stack = TRUE,
+        flip = TRUE,
+        split.by = "seurat_clusters")
+```
+
+## Cluster 1: Macrophages
+```{r cluster1}
+VlnPlot(mouse.unannotated,
+        features = cluster1$gene[1:20],
+        cols = cluster_colors,
+        stack = TRUE,
+        flip = TRUE,
+        split.by = "seurat_clusters")
+```
+
+## Cluster 2: Macrophages
+```{r cluster2}
+VlnPlot(mouse.unannotated,
+        features = cluster2$gene[1:20],
+        cols = cluster_colors,
+        stack = TRUE,
+        flip = TRUE,
+        split.by = "seurat_clusters")
+```
+
+## Cluster 3: Fibroblasts
+```{r cluster3}
+VlnPlot(mouse.unannotated,
+        features = cluster3$gene[1:20],
+        cols = cluster_colors,
+        stack = TRUE,
+        flip = TRUE,
+        split.by = "seurat_clusters")
+```
+
+## Cluster 4: T and NK cells
+```{r cluster4}
+VlnPlot(mouse.unannotated,
+        features = cluster4$gene[1:20],
+        cols = cluster_colors,
+        stack = TRUE,
+        flip = TRUE,
+        split.by = "seurat_clusters")
+```
+
+## Cluster 5: Macrophages
+```{r cluster5}
+VlnPlot(mouse.unannotated,
+        features = cluster5$gene[1:20],
+        cols = cluster_colors,
+        stack = TRUE,
+        flip = TRUE,
+        split.by = "seurat_clusters")
+```
+
+## Cluster 6: B cells
+```{r cluster6}
+VlnPlot(mouse.unannotated,
+        features = cluster6$gene[1:20],
+        cols = cluster_colors,
+        stack = TRUE,
+        flip = TRUE,
+        split.by = "seurat_clusters")
+```
+
+## Cluster 7: Endothelial
+```{r cluster7}
+VlnPlot(mouse.unannotated,
+        features = cluster7$gene[1:20],
+        cols = cluster_colors,
+        stack = TRUE,
+        flip = TRUE,
+        split.by = "seurat_clusters")
+```
+
+## Cluster 8: Neutrophils
+```{r cluster8}
+VlnPlot(mouse.unannotated,
+        features = cluster8$gene[1:20],
+        cols = cluster_colors,
+        stack = TRUE,
+        flip = TRUE,
+        split.by = "seurat_clusters")
+```
+
+## Cluster 9: Myeloid precursors
+```{r cluster9}
+VlnPlot(mouse.unannotated,
+        features = cluster9$gene[1:20],
+        cols = cluster_colors,
+        stack = TRUE,
+        flip = TRUE,
+        split.by = "seurat_clusters")
+```
+
+## Cluster 10: ILCs
+```{r cluster10}
+VlnPlot(mouse.unannotated,
+        features = cluster10$gene[1:20],
+        cols = cluster_colors,
+        stack = TRUE,
+        flip = TRUE,
+        split.by = "seurat_clusters")
+```
+
+## Cluster 11: Pericytes and SMCs
+```{r cluster11}
+VlnPlot(mouse.unannotated,
+        features = cluster11$gene[1:20],
+        cols = cluster_colors,
+        stack = TRUE,
+        flip = TRUE,
+        split.by = "seurat_clusters")
+```
+
+## Cluster 12: Fibroblasts
+```{r cluster12}
+VlnPlot(mouse.unannotated,
+        features = cluster12$gene[1:20],
+        cols = cluster_colors,
+        stack = TRUE,
+        flip = TRUE,
+        split.by = "seurat_clusters")
+```
+
+## Cluster 13: ILCs
+```{r cluster13}
+VlnPlot(mouse.unannotated,
+        features = cluster13$gene[1:20],
+        cols = cluster_colors,
+        stack = TRUE,
+        flip = TRUE,
+        split.by = "seurat_clusters")
+```
+
+## Cluster 14: Schwann cells
+```{r cluster14}
+VlnPlot(mouse.unannotated,
+        features = cluster14$gene[1:20],
+        cols = cluster_colors,
+        stack = TRUE,
+        flip = TRUE,
+        split.by = "seurat_clusters")
+```
+
+## Cluster 15: Mast cells
+```{r cluster15}
+VlnPlot(mouse.unannotated,
+        features = cluster15$gene[1:20],
+        cols = cluster_colors,
+        stack = TRUE,
+        flip = TRUE,
+        split.by = "seurat_clusters")
+```
+
+## Cluster 16: Plasma cells
+```{r cluster16}
+VlnPlot(mouse.unannotated,
+        features = cluster16$gene[1:20],
+        cols = cluster_colors,
+        stack = TRUE,
+        flip = TRUE,
+        split.by = "seurat_clusters")
+```
+
+# Assign Identities
+```{r assign_merged_clusters}
+# Rename all identities
+mouse.annotated <- RenameIdents(object = mouse.unannotated,
+                                "0" = "Endothelial",         # Flt1,Ptprb
+                                "1" = "Macrophages",         # Csf1r,Mrc1 
+                                "2" = "Macrophages",         # Ccr2       
+                                "3" = "Fibroblasts",         # Col1a1      
+                                "4" = "T and NK cells",      # Skap1,Cd247     
+                                "5" = "Macrophages",         # C1qa,C1qb,C1qc
+                                "6" = "B cells",             # Pax5,Ms4a1
+                                "7" = "Endothelial",         # Flt1,Vwf
+                                "8" = "Neutrophils",         # S100a9,Hp
+                                "9" = "Myeloid precursors",  # Mki67  
+                                "10" = "ILCs",               # Il7r,Gata3 
+                                "11" = "Pericytes and SMCs", # Myh11,Notch3 
+                                "12" = "Fibroblasts",        # Col1a1,Col1a2
+                                "13" = "ILCs",               # Il1rl1,Gata3
+                                "14" = "Schwann cells",      # Mpz,Plp1
+                                "15" = "Mast cells",         # Kit
+                                "16" = "Plasma cells")       # Sdc1
+
+# save idents
+mouse.annotated$annotated_clusters <- Idents(mouse.annotated)
+
+# set levels
+mouse.annotated$annotated_clusters <- factor(mouse.annotated$annotated_clusters,
+                                             levels = c("Pericytes and SMCs",
+                                                        "Endothelial",
+                                                        "B cells",
+                                                        "Plasma cells",
+                                                        "T and NK cells",
+                                                        "ILCs",
+                                                        "Neutrophils",
+                                                        "Macrophages",
+                                                        "Myeloid precursors",
+                                                        "Mast cells",
+                                                        "Fibroblasts",
+                                                        "Schwann cells"))
+
+# set ident
+Idents(mouse.annotated) <- "annotated_clusters"
+```
+
+## Annotated UMAP
+```{r annotated_umap_merged}
+# set params
+DefaultAssay(mouse.annotated) <- "RNA"
+mouse.annotated <- NormalizeData(mouse.annotated)
+cluster_colors <- c("#B5B9BA", # Pericytes and SMCs
+                    "#40BBFF", # Endothelial
+                    "#a5d5a9", # B cells
+                    "#5dbd64", # Plasma cells
+                    "#1c7e24", # T and NK cells
+                    "#F57C7C", # ILCs
+                    "#FBB268", # Neutrophils
+                    "#FE8D19", # Macrophages
+                    "#DE9E83", # Myeloid precursors
+                    "#A6CEE3", # Mast cells
+                    "#9D7BBA", # Fibroblasts
+                    "#977899") # Schwann cells
+
+# umap
+umap1 <- DimPlot(object = mouse.annotated, 
+                reduction = "umap",
+                repel = TRUE,
+                group.by = "annotated_clusters",
+                cols = cluster_colors)
+umap1
+
+umap2 <- DimPlot(object = mouse.annotated, 
+                reduction = "umap",
+                repel = TRUE,
+                dims = c(2,3),
+                group.by = "annotated_clusters",
+                cols = cluster_colors)
+umap2
+```
+
+```{r save_annotated_umap, echo=FALSE, eval=FALSE}
+path <- paste0(out, "UMAP/annotated_clusters_dim1&2.pdf")
+pdf(path, width = 7, height = 4)
+umap1
+dev.off()
+
+path <- paste0(out, "UMAP/annotated_clusters_dim2&3.pdf")
+pdf(path, width = 7, height = 4)
+umap2
+dev.off()
+
+remove(umap1,umap2)
+```
+
+```{r save_pass1_annotated_object,echo=FALSE,eval=FALSE}
+# save object
+saveRDS(mouse.annotated,"../../rObjects/annotated_obj.rds")
+```
+
+## Cluster tree
+```{r cluster_tree_annotated, message=FALSE, warning=FALSE}
+# build tree
+mouse.annotated <- BuildClusterTree(object = mouse.annotated,
+                                     dims = 1:15,
+                                     reorder = FALSE,
+                                     reorder.numeric = FALSE)
+tree <- mouse.annotated@tools$BuildClusterTree
+tree$tip.label <- paste0(tree$tip.label)
+
+# plot tree
+ggtree::ggtree(tree, aes(x, y)) +
+  scale_y_reverse() +
+  ggtree::geom_tree() +
+  ggtree::theme_tree() +
+  ggtree::geom_tiplab(offset = 1) +
+  ggtree::geom_tippoint(color = cluster_colors[1:length(tree$tip.label)], shape = 16, size = 5) +
+  coord_cartesian(clip = 'off') +
+  theme(plot.margin = unit(c(0,2.5,0,0), 'cm'))
+```
+
+## Find markers
+## Automatically detect markers
+```{r run_presto_annotated}
+# auto find markers
+Idents(mouse.annotated) <- "annotated_clusters"
+all.markers <- SeuratWrappers::RunPrestoAll(
+  object = mouse.annotated,
+  assay = "RNA",
+  slot = "counts",
+  only.pos = TRUE
+)
+
+# filter based on p_val_adj
+all.markers <- all.markers[all.markers$p_val_adj < 0.01,]
+
+# subset table to top 2 and top 20
+top2 <- Reduce(rbind,
+               by(all.markers,
+                  all.markers["cluster"],
+                  head,
+                  n = 2))
+top20 <- Reduce(rbind,
+               by(all.markers,
+                  all.markers["cluster"],
+                  head,
+                  n = 20))
+
+# save
+write.table(all.markers, 
+            paste0(out, "markers/annotated_auto_find_markers_adjpval_0.01.tsv"),
+            quote = FALSE,
+            row.names = FALSE)
+```
+
+## Violin markers
+```{r annotated_cluster_markers}
+v1 <- VlnPlot(mouse.annotated,
+        features = top2$gene,
+        split.by = "annotated_clusters",
+        flip = TRUE,
+        stack = TRUE,
+        cols = cluster_colors)
+v1
+
+goi <- c("Pdgfrb","Acta2","Vwf","Cldn5","Pecam1","Flt4","Prox1","Lyve1","Ptprc",
+         "Cd19","Ms4a1","Ighd","Cd3e","Trbc2","Il7r","Nkg7","Klrb1b","Klrb1c",
+         "Gata3","Rora","Itgax","H2-Eb1","Ccr2","Ly6c2","Lyz2","Ly6g","Itgam",
+         "Mrc1","Csf1r","Cd38","Mki67","Mcpt4","Ms4a2","Col1a2","Plp1")
+v2 <- VlnPlot(mouse.annotated,
+              group.by = "annotated_clusters",
+              split.by = "annotated_clusters",
+              stack = TRUE,
+              flip = TRUE,
+              cols = cluster_colors,
+              features = goi)
+v2
+```
+
+```{r save_annotated_cluster_markers, eval=FALSE, echo=FALSE}
+pdf(paste0(out, "markers/auto_markers_violin_annotated.pdf"), width = 8, height = 8)
+v1
+dev.off()
+
+pdf(paste0(out, "markers/sandro_markers_violin_annotated.pdf"), width = 12, height = 10)
+v2
+dev.off()
+remove(v1,v2)
+```
+
+## Pseudobulk PCA
+- Each sample will have data points equal to the number of annotated_clusters
+```{r}
+# Step 1: Pseudo-bulk the counts based on sample and cell type
+pseudo <- AggregateExpression(
+    object = mouse.annotated, 
+    assays = "RNA", 
+    features = rownames(mouse.annotated),
+    return.seurat = TRUE, 
+    group.by = c("sample", "annotated_clusters")
+)
+
+# Step 2: Normalize the data
+pseudo <- NormalizeData(pseudo,
+                        normalization.method = "LogNormalize",
+                        scale.factor = 10000)
+
+# Step 3: Find variable features
+pseudo <- FindVariableFeatures(pseudo,
+                               selection.method = "vst", 
+                               nfeatures = 2000)
+
+# Step 4: Scale the data
+pseudo <- ScaleData(pseudo, 
+                    features = rownames(pseudo))
+
+# Step 5: Run PCA
+pseudo <- RunPCA(pseudo, 
+                 features = VariableFeatures(pseudo),
+                 npcs = 10)
+
+# Step 6: Visualize PCA
+pca_colors <- c("firebrick1","cyan","gold","red3","blue","black","forestgreen",
+                    "darkorchid1","green","gray","deeppink","chocolate4","tan",
+                    "steelblue","pink","orange")
+pca <- DimPlot(pseudo, 
+        reduction = "pca",
+        group.by = "annotated_clusters",
+        cols = pca_colors,
+        pt.size = 3)
+pca
+```
+
+```{r}
+pdf(paste0(out, "clustering_QC/pseudobulk_pca.pdf"), width = 6, height = 4)
+pca
+dev.off()
+```
+
+# Shiny App
+```{r shiny_app, warning=FALSE, eval=FALSE}
+# create new object
+shiny.obj <- mouse.annotated
+VariableFeatures(shiny.obj) <- shiny.obj@assays$SCT@var.features
+
+# set default params
+DefaultAssay(shiny.obj) <- "RNA"
+Idents(shiny.obj) <- "annotated_clusters"
+
+# create config
+names <- colnames(shiny.obj@meta.data)
+names <- names[c(22,24,2:21)]
+sc.config <- createConfig(obj = shiny.obj,
+                          meta.to.include = names)
+
+# change wd
+setwd(out)
+
+# output shiny app folder
+makeShinyApp(obj = shiny.obj, 
+             scConf = sc.config, 
+             gene.mapping = TRUE,
+             shiny.title = "All Clusters")
+
+# manual config edits
+sc1conf <- readRDS("shinyApp/sc1conf.rds")
+sc1conf[2,4] <- "#B5B9BA|#40BBFF|#a5d5a9|#5dbd64|#1c7e24|#F57C7C|#FBB268|#FE8D19|#DE9E83|#A6CEE3|#9D7BBA|#977899"
+saveRDS(sc1conf, "shinyApp/sc1conf.rds")
+```
+
