@@ -63,8 +63,8 @@ mouse.unannotated
 # Unannotated QC
 ## UMAP
 ```{r pass1_unannotated_umap}
-cluster_colors <- c("red4","red","orange","gold","lightgreen","chartreuse3","darkgreen",
-                    "cyan","steelblue","blue","deeppink","pink","purple","tan","chocolate4",
+cluster_colors <- c("red","orange","gold","lightgreen","chartreuse3","darkgreen",
+                    "cyan","steelblue","blue","deeppink","pink","purple","chocolate4",
                     "gray","black")
 u1 <- DimPlot(object = mouse.unannotated,
               reduction = "umap",
@@ -405,23 +405,17 @@ VlnPlot(mouse.unannotated,
         features = "C1qb",
         cols = cluster_colors,
         split.by = "seurat_clusters")
-VlnPlot(mouse.unannotated,
-        features = "Mki67",
-        cols = cluster_colors,
-        split.by = "seurat_clusters")
 ```
 
 ## Monocytes/DCs
 - Cd11c/Itgax: Monocytes & DCs
 ```{r monocytes_DCs}
 VlnPlot(mouse.unannotated,
-        features = "Itgax", # Cd11c
+        features = c("Itgax","Cd209a","Flt3","Zbtb46","Ccr2"),
         cols = cluster_colors,
-        split.by = "seurat_clusters")
-VlnPlot(mouse.unannotated,
-        features = "Cd209a",
-        cols = cluster_colors,
-        split.by = "seurat_clusters")
+        split.by = "seurat_clusters",
+        stack = TRUE,
+        flip = TRUE)
 ```
 
 ## Neutrophils
@@ -479,6 +473,12 @@ v1 <- VlnPlot(mouse.unannotated,
               flip = TRUE,
               stack = TRUE)
 v1
+```
+
+```{r save_unannotated_violin}
+pdf(paste0(out, "markers/sandro_markers_violin_unannotated.pdf"), width = 8, height = 8)
+v1
+dev.off()
 ```
 
 ## Automatically detect markers
@@ -551,12 +551,10 @@ cluster11 <- all.markers[all.markers$cluster == 11,]
 cluster12 <- all.markers[all.markers$cluster == 12,]
 cluster13 <- all.markers[all.markers$cluster == 13,]
 cluster14 <- all.markers[all.markers$cluster == 14,]
-cluster15 <- all.markers[all.markers$cluster == 15,]
-cluster16 <- all.markers[all.markers$cluster == 16,]
 ```
 
 # Cluster Annotations
-## Cluster 0: Endothelial
+## Cluster 0: Macrophages
 ```{r cluster0}
 VlnPlot(mouse.unannotated,
         features = cluster0$gene[1:20],
@@ -566,7 +564,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 1: Macrophages
+## Cluster 1: Endothelail
 ```{r cluster1}
 VlnPlot(mouse.unannotated,
         features = cluster1$gene[1:20],
@@ -576,7 +574,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 2: Macrophages
+## Cluster 2: Fibroblasts
 ```{r cluster2}
 VlnPlot(mouse.unannotated,
         features = cluster2$gene[1:20],
@@ -586,7 +584,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 3: Fibroblasts
+## Cluster 3: T and NK cells
 ```{r cluster3}
 VlnPlot(mouse.unannotated,
         features = cluster3$gene[1:20],
@@ -596,7 +594,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 4: T and NK cells
+## Cluster 4: DCs
 ```{r cluster4}
 VlnPlot(mouse.unannotated,
         features = cluster4$gene[1:20],
@@ -646,7 +644,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 9: Myeloid precursors
+## Cluster 9: ILCs
 ```{r cluster9}
 VlnPlot(mouse.unannotated,
         features = cluster9$gene[1:20],
@@ -656,7 +654,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 10: ILCs
+## Cluster 10: Fibroblasts
 ```{r cluster10}
 VlnPlot(mouse.unannotated,
         features = cluster10$gene[1:20],
@@ -676,7 +674,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 12: Fibroblasts
+## Cluster 12: Schwann cells
 ```{r cluster12}
 VlnPlot(mouse.unannotated,
         features = cluster12$gene[1:20],
@@ -686,7 +684,7 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 13: ILCs
+## Cluster 13: Mast cells
 ```{r cluster13}
 VlnPlot(mouse.unannotated,
         features = cluster13$gene[1:20],
@@ -696,30 +694,10 @@ VlnPlot(mouse.unannotated,
         split.by = "seurat_clusters")
 ```
 
-## Cluster 14: Schwann cells
+## Cluster 14: Plasma cells
 ```{r cluster14}
 VlnPlot(mouse.unannotated,
         features = cluster14$gene[1:20],
-        cols = cluster_colors,
-        stack = TRUE,
-        flip = TRUE,
-        split.by = "seurat_clusters")
-```
-
-## Cluster 15: Mast cells
-```{r cluster15}
-VlnPlot(mouse.unannotated,
-        features = cluster15$gene[1:20],
-        cols = cluster_colors,
-        stack = TRUE,
-        flip = TRUE,
-        split.by = "seurat_clusters")
-```
-
-## Cluster 16: Plasma cells
-```{r cluster16}
-VlnPlot(mouse.unannotated,
-        features = cluster16$gene[1:20],
         cols = cluster_colors,
         stack = TRUE,
         flip = TRUE,
@@ -730,23 +708,21 @@ VlnPlot(mouse.unannotated,
 ```{r assign_merged_clusters}
 # Rename all identities
 mouse.annotated <- RenameIdents(object = mouse.unannotated,
-                                "0" = "Endothelial",         # Flt1,Ptprb
-                                "1" = "Macrophages",         # Csf1r,Mrc1 
-                                "2" = "Macrophages",         # Ccr2       
-                                "3" = "Fibroblasts",         # Col1a1      
-                                "4" = "T and NK cells",      # Skap1,Cd247     
-                                "5" = "Macrophages",         # C1qa,C1qb,C1qc
-                                "6" = "B cells",             # Pax5,Ms4a1
-                                "7" = "Endothelial",         # Flt1,Vwf
+                                "0" = "Macrophages",         # Csf1r,C1qb
+                                "1" = "Endothelial",         # Flt1,Ptprb
+                                "2" = "Fibroblasts",         # Col1a1       
+                                "3" = "T and NK cells",      # Skap1      
+                                "4" = "Dendritic cells",     # Ccr2,Itgax  
+                                "5" = "Macrophages",         # C1qb
+                                "6" = "B cells",             # Pax5
+                                "7" = "Endothelial",         # Vwf,Ptprb
                                 "8" = "Neutrophils",         # S100a9,Hp
-                                "9" = "Myeloid precursors",  # Mki67  
-                                "10" = "ILCs",               # Il7r,Gata3 
+                                "9" = "ILCs",                # Gata3  
+                                "10" = "Fibroblasts",        # Col1a1 
                                 "11" = "Pericytes and SMCs", # Myh11,Notch3 
-                                "12" = "Fibroblasts",        # Col1a1,Col1a2
-                                "13" = "ILCs",               # Il1rl1,Gata3
-                                "14" = "Schwann cells",      # Mpz,Plp1
-                                "15" = "Mast cells",         # Kit
-                                "16" = "Plasma cells")       # Sdc1
+                                "12" = "Schwann cells",      # Mpz
+                                "13" = "Mast cells",         # Kit
+                                "14" = "Plasma cells")       # Sdc1
 
 # save idents
 mouse.annotated$annotated_clusters <- Idents(mouse.annotated)
@@ -759,9 +735,9 @@ mouse.annotated$annotated_clusters <- factor(mouse.annotated$annotated_clusters,
                                                         "Plasma cells",
                                                         "T and NK cells",
                                                         "ILCs",
+                                                        "Dendritic cells",
                                                         "Neutrophils",
                                                         "Macrophages",
-                                                        "Myeloid precursors",
                                                         "Mast cells",
                                                         "Fibroblasts",
                                                         "Schwann cells"))
@@ -781,9 +757,9 @@ cluster_colors <- c("#B5B9BA", # Pericytes and SMCs
                     "#5dbd64", # Plasma cells
                     "#1c7e24", # T and NK cells
                     "#F57C7C", # ILCs
+                    "#E42622", # Dendritic cells
                     "#FBB268", # Neutrophils
                     "#FE8D19", # Macrophages
-                    "#DE9E83", # Myeloid precursors
                     "#A6CEE3", # Mast cells
                     "#9D7BBA", # Fibroblasts
                     "#977899") # Schwann cells
@@ -946,8 +922,8 @@ pseudo <- RunPCA(pseudo,
                  npcs = 10)
 
 # Step 6: Visualize PCA
-pca_colors <- c("firebrick1","cyan","gold","red3","blue","black","forestgreen",
-                    "darkorchid1","green","gray","deeppink","chocolate4","tan",
+pca_colors <- c("firebrick1","cyan","gold","blue","black","forestgreen",
+                    "darkorchid1","green","gray","deeppink","chocolate4",
                     "steelblue","pink","orange")
 pca <- DimPlot(pseudo, 
         reduction = "pca",
@@ -975,7 +951,7 @@ Idents(shiny.obj) <- "annotated_clusters"
 
 # create config
 names <- colnames(shiny.obj@meta.data)
-names <- names[c(22,24,2:21)]
+names <- names[c(22,23,2:21)]
 sc.config <- createConfig(obj = shiny.obj,
                           meta.to.include = names)
 
@@ -990,7 +966,7 @@ makeShinyApp(obj = shiny.obj,
 
 # manual config edits
 sc1conf <- readRDS("shinyApp/sc1conf.rds")
-sc1conf[2,4] <- "#B5B9BA|#40BBFF|#a5d5a9|#5dbd64|#1c7e24|#F57C7C|#FBB268|#FE8D19|#DE9E83|#A6CEE3|#9D7BBA|#977899"
+sc1conf[2,4] <- "#B5B9BA|#40BBFF|#a5d5a9|#5dbd64|#1c7e24|#F57C7C|#E42622|#FBB268|#FE8D19|#A6CEE3|#9D7BBA|#977899"
 saveRDS(sc1conf, "shinyApp/sc1conf.rds")
 ```
 

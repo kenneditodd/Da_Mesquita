@@ -1,8 +1,8 @@
 ---
-title: "PLX5622 Diet Mice scRNAseq"
-subtitle: "All Clusters Pass 1 QC and DE"
+title: "E3/E4 Mice Meningeal Dura scRNAseq"
+subtitle: "QC and DE"
 author: "Kennedi Todd"
-date: "06/26/2024"
+date: "09/29/2024"
 output:
   html_document:
     theme: cerulean
@@ -13,8 +13,7 @@ editor_options:
 ---
 
 # Setup
-## Working directory
-```{r working_directory}
+```{r working_directory, echo=FALSE}
 knitr::opts_knit$set(root.dir = ".")
 ```
 
@@ -32,73 +31,48 @@ library(plotly)       # plot_ly()
 library(Seurat)       # DimPlot()\
 library(tidyr)        # %>%
 library(UpSetR)       # fromList()
-
-# work in parallel
-options(mc.cores = detectCores() - 1)
 ```
 
 ## Variables and functions
 ```{r set_variables_and_functions}
-# variables
-sample_order <- c("E3CF1","E3CF2","E3CM1","E3CM2","E3PF1","E3PF2","E3PM1","E3PM2",
-                  "E4CF1","E4CF2","E4CM1","E4CM2","E4PF1","E4PF2","E4PM1","E4PM2")
-sample_colors <- c("#9e0909","#f75959","#f0b402","#f5d67a",
-                   "#fbff0a","#fafaa7","#1d8c0e","#63e851",
-                   "#0271f0","#9cc3f0","#6c39f7","#c589fa",
-                   "#ed2af7","#f5c1f7","#755410","#b5aa82")
-group_order <- c("E3CM","E3PM","E4CM","E4PM",
-                 "E3CF","E3PF","E4CF","E4PF")
-group_colors <- c("#B89B74","#725E47","#B15928","#F7590B",
-                  "#A6CEE3","#34B1E8","#ED8F47","#F4CC25")
-group2_order <- c("E3C","E3P","E4C","E4P")
-group2_colors <- c("#f75959","#fbff0a","#63e851","#0271f0")
+out <- "../../results/pass_1/all_clusters/"
+sample_order <- c("E3.M","E3.F","E4.M","E4.F")
+sample_colors <- c("#26946A","#1814A1","#EAC941","#DF5F00")
+sample_order2 <- c("Male E3", "Male E4", "Female E3", "Female E4")
 isoform_order <- c("E4","E3")
 isoform_colors <- c("darkgray","cornflowerblue")
 sex_order <- c("Male","Female")
-sex_colors <- c("green","purple")
-diet_order <- c("control","PLX5622")
-diet_color <- c("coral","cyan")
-
-# single cell functions
-source("../../../functions/Kennedi_single_cell_functions_v5.R")
-
-# save function
-saveToPDF <- function(...) {
-    d = dev.copy(pdf,...)
-    dev.off(d)
-}
+sex_colors <- c("darkgray","purple")
 ```
 
 ## Load data
-```{r read_pass1_annotated_obj}
-mouse.annotated <- readRDS("../../rObjects/pass1_annotated.rds")
+```{r read_annotated_obj}
+mouse.annotated <- readRDS("../../rObjects/annotated_obj.rds")
 ```
 
 # QC
 ## 2D UMAP
 ```{r 2D_annotated_umap}
-# set colors
-cluster_colors <- c("#B5B9BA",
-                    "#3385BB",
-                    "#40BBFF",
-                    "#84BF96",
-                    "#7F9D55",
-                    "#F57C7C",
-                    "#E42622",
-                    "#FBB268",
-                    "#FE8D19",
-                    "#DE9E83",
-                    "#A6CEE3",
-                    "#9D7BBA",
-                    "#977899")
+# manually set colors
+cluster_colors <- c("#B5B9BA", # Pericytes and SMCs
+                    "#40BBFF", # Endothelial
+                    "#a5d5a9", # B cells
+                    "#5dbd64", # Plasma cells
+                    "#1c7e24", # T and NK cells
+                    "#F57C7C", # ILCs
+                    "#E42622", # Dendritic cells
+                    "#FBB268", # Neutrophils
+                    "#FE8D19", # Macrophages
+                    "#A6CEE3", # Mast cells
+                    "#9D7BBA", # Fibroblasts
+                    "#977899") # Schwann cells
 
-
-# umap
+# plot umap
 umap <- DimPlot(object = mouse.annotated, 
-        reduction = "umap",
-        repel = TRUE,
-        group.by = "annotated_clusters",
-        cols = cluster_colors)
+                reduction = "umap",
+                repel = TRUE,
+                group.by = "annotated_clusters",
+                cols = cluster_colors)
 umap
 ```
 
@@ -110,9 +84,9 @@ colnames(embeddings)[4] <- "annotated_clusters"
 embeddings <- as.data.frame(embeddings)
 
 three.dim <- plot_ly(embeddings,
-                     x = ~UMAP_1, 
-                     y = ~UMAP_2, 
-                     z = ~UMAP_3, 
+                     x = ~umap_1, 
+                     y = ~umap_2, 
+                     z = ~umap_3, 
                      color = ~annotated_clusters, 
                      colors = cluster_colors,
                      size = 1) 
@@ -164,7 +138,7 @@ umap3 <- DimPlot(object = mouse.annotated,
                  group.by = "annotated_clusters",
                  reduction = "umap",
                  split.by = "sample",
-                 ncol = 4,
+                 ncol = 2,
                  repel = TRUE,
                  cols = cluster_colors)
 umap3
@@ -188,76 +162,49 @@ umap5 <- DimPlot(object = mouse.annotated,
                  repel = TRUE)
 umap5
 
-# group
+
+# sample2
 umap6 <- DimPlot(object = mouse.annotated, 
                  group.by = "annotated_clusters",
                  reduction = "umap",
-                 split.by = "group",
+                 split.by = "sample2",
                  cols = cluster_colors,
-                 ncol = 4,
+                 ncol = 2,
                  repel = TRUE)
 umap6
-
-# group2
-umap7 <- DimPlot(object = mouse.annotated, 
-                 group.by = "annotated_clusters",
-                 reduction = "umap",
-                 split.by = "group2",
-                 cols = cluster_colors,
-                 ncol = 2,
-                 repel = TRUE)
-umap7
-
-# diet
-umap8 <- DimPlot(object = mouse.annotated, 
-                 group.by = "annotated_clusters",
-                 reduction = "umap",
-                 split.by = "diet",
-                 cols = cluster_colors,
-                 ncol = 2,
-                 repel = TRUE)
-umap8
 ```
 
-```{r, echo=FALSE, eval=FALSE}
+```{r save_split_umap, echo=FALSE, eval=FALSE}
+path <- paste0(out, "clustering_QC/")
+pdf(paste0(path, "umap_split_isoform.pdf"), width = 12, height = 6)
 umap1
-path <- paste0("../../results/all_clusters_pass1/clustering_QC/")
-saveToPDF(paste0(path, "split_isoform_umap.pdf"), width = 12, height = 6)
 dev.off()
 
+pdf(paste0(path, "umap_split_sex.pdf"), width = 12, height = 6)
 umap2
-saveToPDF(paste0(path, "split_sex_umap.pdf"), width = 12, height = 6)
 dev.off()
 
+pdf(paste0(path, "umap_split_sample.pdf"), width = 10, height = 6)
 umap3
-saveToPDF(paste0(path, "split_sample_umap.pdf"), width = 14, height = 10)
 dev.off()
 
+pdf(paste0(path, "umap_split_cell_cycle_phase.pdf"), width = 14, height = 6)
 umap4
-saveToPDF(paste0(path, "split_cell_cycle_phase_umap.pdf"), width = 14, height = 6)
 dev.off()
 
+pdf(paste0(path, "umap_split_mito_factor.pdf"), width = 12, height = 8)
 umap5
-saveToPDF(paste0(path, "split_mito_factor_umap.pdf"), width = 12, height = 8)
 dev.off()
 
+pdf(paste0(path, "umap_split_sample2.pdf"), width = 10, height = 6)
 umap6
-saveToPDF(paste0(path, "split_group_umap.pdf"), width = 16, height = 8)
 dev.off()
 
-umap7
-saveToPDF(paste0(path, "split_group2_umap.pdf"), width = 12, height = 8)
-dev.off()
-
-umap8
-saveToPDF(paste0(path, "split_diet_umap.pdf"), width = 12, height = 6)
-dev.off()
-
-remove(umap1,umap2,umap3,umap4,umap5,umap6,umap7)
+remove(umap1,umap2,umap3,umap4,umap5,umap6)
 ```
 
 ## Heatmap UMAP
-```{r feature_plots_annotated, warning=FALSE, message=FALSE}
+```{r umap_heatmaps, warning=FALSE, message=FALSE}
 # UMAP percent.mt
 f1 <- FeaturePlot(mouse.annotated, 
             reduction = "umap", 
@@ -294,26 +241,26 @@ f5 <- FeaturePlot(mouse.annotated,
 f5
 ```
 
-```{r, echo=FALSE, eval=FALSE}
-path <- "../../results/all_clusters_pass1/clustering_QC/heatmap_"
+```{r save_umap_heatmap, echo=FALSE, eval=FALSE}
+path <- paste0(out, "clustering_QC/umap_heatmap_")
+pdf(paste0(path, "percent_mito.pdf"), width = 8, height = 6)
 f1
-saveToPDF(paste0(path, "percent_mito.pdf"), width = 8, height = 6)
 dev.off()
 
+pdf(paste0(path, "nCount.pdf"), width = 8, height = 6)
 f2
-saveToPDF(paste0(path, "nCount.pdf"), width = 8, height = 6)
 dev.off()
 
+pdf(paste0(path, "nFeature.pdf"), width = 8, height = 6)
 f3
-saveToPDF(paste0(path, "nFeature.pdf"), width = 8, height = 6)
 dev.off()
 
+pdf(paste0(path, "percent_ribo.pdf"), width = 8, height = 6)
 f4
-saveToPDF(paste0(path, "percent_ribo.pdf"), width = 8, height = 6)
 dev.off()
 
+pdf(paste0(path, "cell_complexity.pdf"), width = 8, height = 6)
 f5
-saveToPDF(paste0(path, "cell_complexity.pdf"), width = 8, height = 6)
 dev.off()
 
 remove(f1,f2,f3,f4,f5)
@@ -393,109 +340,42 @@ b5 <- mouse.annotated@meta.data %>%
   ggtitle("Percentage of mito.factor per cluster") +
   theme(axis.text.x = element_text(angle = 90,vjust = 0.5, hjust=1))
 b5
-
-# group
-b6 <- mouse.annotated@meta.data %>%
-  group_by(annotated_clusters, group) %>%
-  dplyr::count() %>%
-  group_by(annotated_clusters) %>%
-  dplyr::mutate(percent = 100*n/sum(n)) %>%
-  ungroup() %>%
-  ggplot(aes(x=annotated_clusters,y=percent, fill=group)) +
-  theme_classic() +
-  geom_col() +
-  scale_fill_manual(values = group_colors) +
-  ggtitle("Percentage of group per cluster") +
-  theme(axis.text.x = element_text(angle = 90,vjust = 0.5, hjust=1))
-b6
-
-# group2
-b7 <- mouse.annotated@meta.data %>%
-  group_by(annotated_clusters, group2) %>%
-  dplyr::count() %>%
-  group_by(annotated_clusters) %>%
-  dplyr::mutate(percent = 100*n/sum(n)) %>%
-  ungroup() %>%
-  ggplot(aes(x=annotated_clusters,y=percent, fill=group2)) +
-  theme_classic() +
-  geom_col() +
-  scale_fill_manual(values = group2_colors) +
-  ggtitle("Percentage of group per cluster") +
-  theme(axis.text.x = element_text(angle = 90,vjust = 0.5, hjust=1))
-b7
-
-# diet
-b8 <- mouse.annotated@meta.data %>%
-  group_by(annotated_clusters, diet) %>%
-  dplyr::count() %>%
-  group_by(annotated_clusters) %>%
-  dplyr::mutate(percent = 100*n/sum(n)) %>%
-  ungroup() %>%
-  ggplot(aes(x=annotated_clusters,y=percent, fill=diet)) +
-  theme_classic() +
-  geom_col() +
-  scale_fill_manual(values = diet_color) +
-  ggtitle("Percentage of diet per cluster") +
-  theme(axis.text.x = element_text(angle = 90,vjust = 0.5, hjust=1))
-b8
 ```
 
-```{r,echo=FALSE,eval=FALSE}
+```{r save_percent_per_cluster, echo=FALSE, eval=FALSE}
 # save
+path <- paste0(out, "clustering_QC/percent_")
+pdf(paste0(path, "isoform_per_cluster.pdf"), width = 8, height = 6)
 b1
-path <- "../../results/all_clusters_pass1/clustering_QC/percent_isoform_per_cluster"
-saveToPDF(paste0(path, ".pdf"), width = 8, height = 6)
 dev.off()
 
 # save
+pdf(paste0(path, "sex_per_cluster.pdf"), width = 8, height = 6)
 b2
-path <- "../../results/all_clusters_pass1/clustering_QC/percent_sex_per_cluster"
-saveToPDF(paste0(path, ".pdf"), width = 8, height = 6)
 dev.off()
 
 # save
+pdf(paste0(path, "sample_per_cluster.pdf"), width = 8, height = 6)
 b3
-path <- "../../results/all_clusters_pass1/clustering_QC/percent_sample_per_cluster"
-saveToPDF(paste0(path, ".pdf"), width = 8, height = 6)
 dev.off()
 
 # save
+pdf(paste0(path, "phase_per_cluster.pdf"), width = 8, height = 6)
 b4
-path <- "../../results/all_clusters_pass1/clustering_QC/percent_phase_per_cluster"
-saveToPDF(paste0(path, ".pdf"), width = 8, height = 6)
 dev.off()
 
 # save
+pdf(paste0(path, "mito_factor_per_cluster.pdf"), width = 8, height = 6)
 b5
-path <- "../../results/all_clusters_pass1/clustering_QC/percent_mito_factor_per_cluster"
-saveToPDF(paste0(path, ".pdf"), width = 8, height = 6)
-dev.off()
-
-
-# save
-b6
-path <- "../../results/all_clusters_pass1/clustering_QC/percent_group_per_cluster"
-saveToPDF(paste0(path, ".pdf"), width = 8, height = 6)
-dev.off()
-
-# save
-b7
-path <- "../../results/all_clusters_pass1/clustering_QC/percent_group2_per_cluster"
-saveToPDF(paste0(path, ".pdf"), width = 8, height = 6)
-dev.off()
-
-# save
-b8
-path <- "../../results/all_clusters_pass1/clustering_QC/percent_diet_per_cluster"
-saveToPDF(paste0(path, ".pdf"), width = 8, height = 6)
 dev.off()
 
 # cleanup
-remove(b1,b2,b3,b4,b5,b6,b7,b8)
+remove(b1,b2,b3,b4,b5)
 ```
 
 ## Cluster tree
-```{r cluster_tree_indv_annotated, message=FALSE, warning=FALSE}
+```{r cluster_tree_annotated, message=FALSE, warning=FALSE}
+# build tree
 Idents(mouse.annotated) <- mouse.annotated$annotated_clusters
 mouse.annotated <- BuildClusterTree(object = mouse.annotated,
                                      dims = 1:15,
@@ -505,6 +385,7 @@ mouse.annotated <- BuildClusterTree(object = mouse.annotated,
 tree <- mouse.annotated@tools$BuildClusterTree
 tree$tip.label <- paste0(tree$tip.label)
 
+# plot tree
 p <- ggtree::ggtree(tree, aes(x, y)) +
   scale_y_reverse() +
   ggtree::geom_tree() +
@@ -516,18 +397,19 @@ p <- ggtree::ggtree(tree, aes(x, y)) +
 p
 ```
 
-```{r,echo=FALSE,eval=FALSE}
+```{r save_cluster_tree_annotated, echo=FALSE, eval=FALSE}
+pdf(paste0(out, "clustering_QC/cluster_tree_annotated.pdf"), width = 20, height = 10)
 p
-path <- paste0("../../results/all_clusters_pass1/clustering_QC/cluster_tree")
-saveToPDF(paste0(path, ".pdf"), width = 20, height = 10)
 dev.off()
 ```
 
 ## Cells per sample
-```{r}
+```{r cells_per_sample}
+# extract data
 data <- as.data.frame(table(mouse.annotated$sample))
 colnames(data) <- c("sample","frequency")
 
+# plot
 ncells <- ggplot(data, aes(x = sample, y = frequency, fill = sample)) + 
   geom_col() +
   theme_classic() +
@@ -542,18 +424,19 @@ ncells <- ggplot(data, aes(x = sample, y = frequency, fill = sample)) +
 ncells
 ```
 
-```{r,echo=FALSE,eval=FALSE}
+```{r save_cells_per_sample, echo=FALSE, eval=FALSE}
+pdf(paste0(out, "clustering_QC/cells_per_sample.pdf"), width = 6, height = 4)
 ncells
-path <- "../../results/all_clusters_pass1/clustering_QC/cells_per_sample"
-saveToPDF(paste0(path, ".pdf"), width = 6, height = 4)
 dev.off()
 ```
 
 ## Cells per cluster
-```{r}
+```{r cells_per_cluster}
+# extract data
 data <- as.data.frame(table(mouse.annotated$annotated_clusters))
 colnames(data) <- c("cluster","frequency")
 
+# plot
 ncells <- ggplot(data, aes(x = cluster, y = frequency, fill = cluster)) + 
   geom_col() +
   theme_classic() +
@@ -561,75 +444,34 @@ ncells <- ggplot(data, aes(x = cluster, y = frequency, fill = cluster)) +
             position=position_dodge(width=0.9), 
             vjust=-0.25) +
   scale_fill_manual(values = cluster_colors) + 
-  scale_y_continuous(breaks = seq(0,12000, by = 2000), limits = c(0,12000)) +
+  scale_y_continuous(breaks = seq(0,5000, by = 1000), limits = c(0,5000)) +
   ggtitle("Cells per Cluster") +
   theme(legend.position =  "none") + 
   theme(axis.text.x = element_text(angle = 45, hjust=1))
 ncells
 ```
 
-```{r,echo=FALSE,eval=FALSE}
+```{r save_cells_per_cluster, echo=FALSE, eval=FALSE}
+pdf(paste0(out, "clustering_QC/cells_per_cluster.pdf"), width = 8, height = 6)
 ncells
-path <- "../../results/all_clusters_pass1/clustering_QC/cells_per_cluster"
-saveToPDF(paste0(path, ".pdf"), width = 8, height = 6)
 dev.off()
 ```
 
 # Differential expression
-## E3 PLX5622 male vs E3 control male within each cluster
-```{r E3PM_vs_E3CM, warning=FALSE, message=FALSE, eval=FALSE}
-# intitialize variables
+## E4 female vs E3 female within each cluster
+```{r isoform_de, eval=FALSE}
+# initialize variables
 cell_types <- levels(mouse.annotated$annotated_clusters)
-e3.male.df <- data.frame()
-options(mc.cores = 2)
+female.df <- data.frame()
 
 # loop through clusters
 for (i in cell_types) {
   print(i)
   cluster <- subset(mouse.annotated, annotated_clusters == i)
-  Idents(cluster) <- cluster$group
+  Idents(cluster) <- cluster$sample
   markers <- FindMarkers(object = cluster,
-                         ident.1 = "E3PM",
-                         ident.2 = "E3CM",
-                         only.pos = FALSE, # default
-                         min.pct = 0.10,   # default
-                         test.use = "MAST",
-                         verbose = TRUE,
-                         assay = "RNA")
-  if(nrow(markers) == 0) {
-    next
-  }
-  markers$cluster <- i
-  markers$gene <- rownames(markers)
-  e3.male.df <- rbind(e3.male.df, markers)
-}
-
-# reformat table
-colnames(e3.male.df)[c(3,4)] <- c("percent_E3PM","percent_E3CM")
-rownames(e3.male.df) <- 1:nrow(e3.male.df)
-e3.male.df$percent_difference <- abs(e3.male.df$percent_E3PM - e3.male.df$percent_E3CM)
-e3.male.df <- e3.male.df[,c(6,7,1,5,2,3,4,8)]
-
-# write table
-write.table(e3.male.df, "../../results/all_clusters_pass1/DEGs/DEG_tables/E3PM_vs_E3CM_DEGs.tsv", 
-            sep = "\t", quote = FALSE, row.names = FALSE)
-```
-
-## E4 PLX5622 male vs E4 control male within each cluster
-```{r E4PM_vs_E4CM, warning=FALSE, message=FALSE, eval=FALSE}
-# intitialize variables
-cell_types <- levels(mouse.annotated$annotated_clusters)
-e4.male.df <- data.frame()
-options(mc.cores = 1)
-
-# loop through clusters
-for (i in cell_types) {
-  print(i)
-  cluster <- subset(mouse.annotated, annotated_clusters == i)
-  Idents(cluster) <- cluster$group
-  markers <- FindMarkers(object = cluster,
-                         ident.1 = "E4PM",
-                         ident.2 = "E4CM",
+                         ident.1 = "E4.F",
+                         ident.2 = "E3.F",
                          only.pos = FALSE, # default
                          min.pct = 0.10,  # default
                          test.use = "MAST",
@@ -640,34 +482,35 @@ for (i in cell_types) {
   }
   markers$cluster <- i
   markers$gene <- rownames(markers)
-  e4.male.df <- rbind(e4.male.df, markers)
+  female.df <- rbind(female.df, markers)
 }
 
 # reformat table
-colnames(e4.male.df)[c(3,4)] <- c("percent_E4PM","percent_E4CM")
-rownames(e4.male.df) <- 1:nrow(e4.male.df)
-e4.male.df$percent_difference <- abs(e4.male.df$percent_E4PM - e4.male.df$percent_E4CM)
-e4.male.df <- e4.male.df[,c(6,7,1,5,2,3,4,8)]
+colnames(female.df)[c(3,4)] <- c("percent_E4_F","percent_E3_F")
+rownames(female.df) <- 1:nrow(female.df)
+female.df$percent_difference <- abs(female.df$percent_E4_F - female.df$percent_E3_F)
+female.df <- female.df[,c(6,7,1,5,2,3,4,8)]
 
 # write table
-write.table(e4.male.df, "../../results/all_clusters_pass1/DEGs/DEG_tables/E4PM_vs_E4CM_DEGs.tsv", 
+write.table(female.df, 
+            file = paste0(out, "DEGs/DEG_tables/E4_F_vs_E3_F_DEGs.tsv"), 
             sep = "\t", quote = FALSE, row.names = FALSE)
 ```
 
-## E3 PLX5622 female vs E3 control female within each cluster
-```{r E3PF_vs_E3CF, warning=FALSE, message=FALSE, eval=FALSE}
-# intitialize variables
+## E4 male vs E3 male within each cluster
+```{r sex_de, eval=FALSE}
+# initialize variable
 cell_types <- levels(mouse.annotated$annotated_clusters)
-e3.female.df <- data.frame()
+male.df <- data.frame()
 
 # loop through clusters
 for (i in cell_types) {
   print(i)
   cluster <- subset(mouse.annotated, annotated_clusters == i)
-  Idents(cluster) <- cluster$group
+  Idents(cluster) <- cluster$sample
   markers <- FindMarkers(object = cluster,
-                         ident.1 = "E3PF",
-                         ident.2 = "E3CF",
+                         ident.1 = "E4.M",
+                         ident.2 = "E3.M",
                          only.pos = FALSE, # default
                          min.pct = 0.10,  # default
                          test.use = "MAST",
@@ -678,527 +521,107 @@ for (i in cell_types) {
   }
   markers$cluster <- i
   markers$gene <- rownames(markers)
-  e3.female.df <- rbind(e3.female.df, markers)
+  male.df <- rbind(male.df, markers)
 }
 
 # reformat table
-colnames(e3.female.df)[c(3,4)] <- c("percent_E3PF","percent_E3CF")
-rownames(e3.female.df) <- 1:nrow(e3.female.df)
-e3.female.df$percent_difference <- abs(e3.female.df$percent_E3PF - e3.female.df$percent_E3CF)
-e3.female.df <- e3.female.df[,c(6,7,1,5,2,3,4,8)]
+colnames(male.df)[c(3,4)] <- c("percent_E4_M","percent_E3_M")
+rownames(male.df) <- 1:nrow(male.df)
+male.df$percent_difference <- abs(male.df$percent_E4_M - male.df$percent_E3_M)
+male.df <- male.df[,c(6,7,1,5,2,3,4,8)]
 
 # write table
-write.table(e3.female.df, "../../results/all_clusters_pass1/DEGs/DEG_tables/E3PF_vs_E3CF_DEGs.tsv", 
-            sep = "\t", quote = FALSE, row.names = FALSE)
-```
-
-## E4 PLX5622 female vs E4 control female within each cluster
-```{r isoform_de, warning=FALSE, message=FALSE, eval=FALSE}
-# intitialize variables
-options(mc.cores = 1)
-cell_types <- levels(mouse.annotated$annotated_clusters)
-e4.female.df <- data.frame()
-
-# loop through clusters
-for (i in cell_types) {
-  print(i)
-  cluster <- subset(mouse.annotated, annotated_clusters == i)
-  Idents(cluster) <- cluster$group
-  markers <- FindMarkers(object = cluster,
-                         ident.1 = "E4PF",
-                         ident.2 = "E4CF",
-                         only.pos = FALSE, # default
-                         min.pct = 0.10,  # default
-                         test.use = "MAST",
-                         verbose = TRUE,
-                         assay = "RNA")
-  if(nrow(markers) == 0) {
-    next
-  }
-  markers$cluster <- i
-  markers$gene <- rownames(markers)
-  e4.female.df <- rbind(e4.female.df, markers)
-}
-
-# reformat table
-colnames(e4.female.df)[c(3,4)] <- c("percent_E4PF","percent_E4CF")
-rownames(e4.female.df) <- 1:nrow(e4.female.df)
-e4.female.df$percent_difference <- abs(e4.female.df$percent_E4PF - e4.female.df$percent_E4CF)
-e4.female.df <- e4.female.df[,c(6,7,1,5,2,3,4,8)]
-
-# write table
-write.table(e4.female.df, "../../results/all_clusters_pass1/DEGs/DEG_tables/E4PF_vs_E4CF_DEGs.tsv", 
-            sep = "\t", quote = FALSE, row.names = FALSE)
-```
-
-## E4 control male vs E3 control male within each cluster
-```{r E4CM_vs_E3CM, warning=FALSE, message=FALSE, eval=FALSE}
-# intitialize variables
-options(mc.cores = 1)
-cell_types <- levels(mouse.annotated$annotated_clusters)
-male.control.df <- data.frame()
-
-# loop through clusters
-for (i in cell_types) {
-  print(i)
-  cluster <- subset(mouse.annotated, annotated_clusters == i)
-  Idents(cluster) <- cluster$group
-  markers <- FindMarkers(object = cluster,
-                         ident.1 = "E4CM",
-                         ident.2 = "E3CM",
-                         only.pos = FALSE, # default
-                         min.pct = 0.10,  # default
-                         test.use = "MAST",
-                         verbose = TRUE,
-                         assay = "RNA")
-  if(nrow(markers) == 0) {
-    next
-  }
-  markers$cluster <- i
-  markers$gene <- rownames(markers)
-  male.control.df <- rbind(male.control.df, markers)
-}
-
-# reformat table
-colnames(male.control.df)[c(3,4)] <- c("percent_E4CM","percent_E3CM")
-rownames(male.control.df) <- 1:nrow(male.control.df)
-male.control.df$percent_difference <- 
-  abs(male.control.df$percent_E4CM - male.control.df$percent_E3CM)
-male.control.df <- male.control.df[,c(6,7,1,5,2,3,4,8)]
-
-# write table
-write.table(male.control.df, 
-            "../../results/all_clusters_pass1/DEGs/DEG_tables/E4CM_vs_E3CM_DEGs.tsv", 
-            sep = "\t", quote = FALSE, row.names = FALSE)
-```
-
-## E4 control male vs E3 control male within each cluster
-```{r E4CM_vs_E3CM, warning=FALSE, message=FALSE, eval=FALSE}
-# intitialize variables
-options(mc.cores = 1)
-cell_types <- levels(mouse.annotated$annotated_clusters)
-male.control.df <- data.frame()
-
-# loop through clusters
-for (i in cell_types) {
-  print(i)
-  cluster <- subset(mouse.annotated, annotated_clusters == i)
-  Idents(cluster) <- cluster$group
-  markers <- FindMarkers(object = cluster,
-                         ident.1 = "E4CM",
-                         ident.2 = "E3CM",
-                         only.pos = FALSE, # default
-                         min.pct = 0.10,  # default
-                         test.use = "MAST",
-                         verbose = TRUE,
-                         assay = "RNA")
-  if(nrow(markers) == 0) {
-    next
-  }
-  markers$cluster <- i
-  markers$gene <- rownames(markers)
-  male.control.df <- rbind(male.control.df, markers)
-}
-
-# reformat table
-colnames(male.control.df)[c(3,4)] <- c("percent_E4CM","percent_E3CM")
-rownames(male.control.df) <- 1:nrow(male.control.df)
-male.control.df$percent_difference <- 
-  abs(male.control.df$percent_E4CM - male.control.df$percent_E3CM)
-male.control.df <- male.control.df[,c(6,7,1,5,2,3,4,8)]
-
-# write table
-write.table(male.control.df, 
-            "../../results/all_clusters_pass1/DEGs/DEG_tables/E4CM_vs_E3CM_DEGs.tsv", 
-            sep = "\t", quote = FALSE, row.names = FALSE)
-```
-
-## E4 control female vs E3 control female within each cluster
-```{r E4CF_vs_E3CF, warning=FALSE, message=FALSE, eval=FALSE}
-# intitialize variables
-options(mc.cores = 1)
-cell_types <- levels(mouse.annotated$annotated_clusters)
-female.control.df <- data.frame()
-
-# loop through clusters
-for (i in cell_types) {
-  print(i)
-  cluster <- subset(mouse.annotated, annotated_clusters == i)
-  Idents(cluster) <- cluster$group
-  markers <- FindMarkers(object = cluster,
-                         ident.1 = "E4CF",
-                         ident.2 = "E3CF",
-                         only.pos = FALSE, # default
-                         min.pct = 0.10,  # default
-                         test.use = "MAST",
-                         verbose = TRUE,
-                         assay = "RNA")
-  if(nrow(markers) == 0) {
-    next
-  }
-  markers$cluster <- i
-  markers$gene <- rownames(markers)
-  female.control.df <- rbind(female.control.df, markers)
-}
-
-# reformat table
-colnames(female.control.df)[c(3,4)] <- c("percent_E4CF","percent_E3CF")
-rownames(female.control.df) <- 1:nrow(female.control.df)
-female.control.df$percent_difference <- 
-  abs(female.control.df$percent_E4CF - female.control.df$percent_E3CF)
-female.control.df <- female.control.df[,c(6,7,1,5,2,3,4,8)]
-
-# write table
-write.table(female.control.df, 
-            "../../results/all_clusters_pass1/DEGs/DEG_tables/E4CF_vs_E3CF_DEGs.tsv", 
-            sep = "\t", quote = FALSE, row.names = FALSE)
+write.table(male.df, 
+            file = paste0(out, "DEGs/DEG_tables/E4_M_vs_E3_M_DEGs.tsv"), 
+            sep = "\t",quote = FALSE, row.names = FALSE)
 ```
 
 ## Compare DEGs
-```{r,eval=FALSE}
+```{r compare_degs, eval=FALSE}
 # read tables
-prefix <- "../../results/all_clusters_pass1/DEGs/DEG_tables/"
-e3.male.df <- read.table(paste0(prefix,"E3PM_vs_E3CM_DEGs.tsv"),
-                         sep = "\t", 
-                         header = TRUE)
-e4.male.df <- read.table(paste0(prefix,"E4PM_vs_E4CM_DEGs.tsv"),
-                         sep = "\t", 
-                         header = TRUE)
-e3.female.df <- read.table(paste0(prefix,"E3PF_vs_E3CF_DEGs.tsv"),
-                           sep = "\t", 
-                           header = TRUE)
-
-e4.female.df <- read.table(paste0(prefix,"E4PF_vs_E4CF_DEGs.tsv"),
-                           sep = "\t", 
-                           header = TRUE)
-male.control.df <- read.table(paste0(prefix,"E4CM_vs_E3CM_DEGs.tsv"),
-                              sep = "\t", 
-                              header = TRUE)
-female.control.df <- read.table(paste0(prefix,"E4CF_vs_E3CF_DEGs.tsv"),
-                                sep = "\t", 
-                                header = TRUE)
+female.df <- read.table(paste0(out, "DEGs/DEG_tables/E4_F_vs_E3_F_DEGs.tsv"),
+                        sep = "\t", 
+                        header = TRUE)
+male.df <- read.table(paste0(out, "DEGs/DEG_tables/E4_M_vs_E3_M_DEGs.tsv"),
+                      sep = "\t", 
+                      header = TRUE)
 
 # filter
-e3.male.df <- e3.male.df[e3.male.df$p_val_adj < 0.05,]
-e4.male.df <- e4.male.df[e4.male.df$p_val_adj < 0.05,]
-e3.female.df <- e3.female.df[e3.female.df$p_val_adj < 0.05,]
-e4.female.df <- e4.female.df[e4.female.df$p_val_adj < 0.05,]
-male.control.df <- male.control.df[male.control.df$p_val_adj < 0.05,]
-female.control.df <- female.control.df[female.control.df$p_val_adj < 0.05,]
-
+female.df <- female.df[female.df$p_val_adj < 0.05,]
+male.df <- male.df[male.df$p_val_adj < 0.05,]
 
 # add columns
-direction <- e3.male.df$avg_log2FC > 0
-direction <- gsub(TRUE, "E3PM_up", direction)
-direction <- gsub(FALSE, "E3PM_down", direction)
-e3.male.df$direction <- direction
-direction <- e4.male.df$avg_log2FC > 0
-direction <- gsub(TRUE, "E4PM_up", direction)
-direction <- gsub(FALSE, "E4PM_down", direction)
-e4.male.df$direction <- direction
-direction <- e3.female.df$avg_log2FC > 0
-direction <- gsub(TRUE, "E3PF_up", direction)
-direction <- gsub(FALSE, "E3PF_down", direction)
-e3.female.df$direction <- direction
-direction <- e4.female.df$avg_log2FC > 0
-direction <- gsub(TRUE, "E4PF_up", direction)
-direction <- gsub(FALSE, "E4PF_down", direction)
-e4.female.df$direction <- direction
-direction <- male.control.df$avg_log2FC > 0
-direction <- gsub(TRUE, "E4CM_up", direction)
-direction <- gsub(FALSE, "E4CM_down", direction)
-male.control.df$direction <- direction
-direction <- female.control.df$avg_log2FC > 0
-direction <- gsub(TRUE, "E4CF_up", direction)
-direction <- gsub(FALSE, "E4CF_down", direction)
-female.control.df$direction <- direction
+direction <- female.df$avg_log2FC > 0
+direction <- gsub(TRUE, "E4_female_up", direction)
+direction <- gsub(FALSE, "E4_female_down", direction)
+female.df$direction <- direction
+direction <- male.df$avg_log2FC > 0
+direction <- gsub(TRUE, "E4_male_up", direction)
+direction <- gsub(FALSE, "E4_male_down", direction)
+male.df$direction <- direction
 
 # reformat tables
-e3.male.df2 <- e3.male.df %>%
+female.df2 <- female.df %>%
   dplyr::count(cluster,direction) %>%
   tidyr::spread(cluster, n)
-e4.male.df2 <- e4.male.df %>%
-  dplyr::count(cluster,direction) %>%
-  tidyr::spread(cluster, n)
-e3.female.df2 <- e3.female.df %>%
-  dplyr::count(cluster,direction) %>%
-  tidyr::spread(cluster, n)
-e4.female.df2 <- e4.female.df %>%
-  dplyr::count(cluster,direction) %>%
-  tidyr::spread(cluster, n)
-male.control.df2 <- male.control.df %>%
-  dplyr::count(cluster,direction) %>%
-  tidyr::spread(cluster, n)
-female.control.df2 <- female.control.df %>%
+male.df2 <- male.df %>%
   dplyr::count(cluster,direction) %>%
   tidyr::spread(cluster, n)
 
 # master table
-df <- smartbind(e3.male.df2, e4.male.df2,
-                e3.female.df2, e4.female.df2,
-                male.control.df2, female.control.df2)
+df <- smartbind(female.df2, male.df2)
 
-# reformat
-df[is.na(df)] <- 0
-rownames(df) <- df$direction
-df$direction <- NULL
-```
-
-```{r,echo=FALSE,eval=FALSE}
 # save
 write.table(df, 
-            paste0(prefix,"DEG_comparison_pvaladj_0.05.tsv"),
-            sep = "\t", quote = FALSE, row.names = TRUE)
+            file = paste0(out, "DEGs/DEG_tables/DEG_comparison_pvaladj_0.05.tsv"),
+            sep = "\t", 
+            quote = FALSE, 
+            row.names = FALSE)
 ```
 
+
 ## DEG heatmap
-```{r}
+```{r DEG_heatmap, eval=FALSE, warning=FALSE}
 # set heatmap colors and names
-meta <- data.frame(diet = c(rep("PLX5622 vs Control", 8),
-                            rep("Control vs Control", 4)),
-                   allele = c(rep("E3 vs E3", 2),
-                              rep("E4 vs E4", 2),
-                              rep("E3 vs E3", 2),
-                              rep("E4 vs E4", 2),
-                              rep("E4 vs E3", 4)),
-                   sex = c(rep("Male", 4),
-                           rep("Female", 4),
-                           rep("Male", 2),
-                           rep("Female", 2)))
-rownames(meta) <- rownames(df)
 paletteLength <- 100
 myColor <- colorRampPalette(c("white","#f0eb9e","darkgreen"))(paletteLength)
-ann_colors = list(diet = c(`PLX5622 vs Control` = "cyan",
-                           `Control vs Control` = "coral"),
-                  allele = c(`E3 vs E3` = "#f75959",
-                             `E4 vs E4` = "#0271f0",
-                             `E4 vs E3` = "#fbff0a"),
-                  sex = c(Male = "#63e851",
-                          Female = "gray"))
+
+# reformat table
+df2 <- df
+rownames(df2) <- df2$direction
+df2$direction <- NULL
 
 # save
-path <- paste0(prefix, "/DEG_comparison_heatmap_FDRq_0.05_LFC_0.00.pdf")
+path <- paste0(out, "DEGs/DEG_tables/DEG_comparison_heatmap_pvaladj_0.05.pdf")
 pdf(path, width = 10, height = 6)
 
 # plot
-pheatmap::pheatmap(df,
+pheatmap::pheatmap(df2,
                    main = "FDRq < 0.05, |LFC| > 0",
                    treeheight_row = 0,
                    treeheight_col = 0,
                    color = myColor,
                    cluster_rows = FALSE,
-                   annotation_row = meta,
-                   annotation_colors = ann_colors,
-                   display_numbers = round(df, digits = 0),
+                   display_numbers = round(df2, digits = 0),
                    fontsize_number = 12,
                    number_color = "black")
 ```
 
-
-## Upset plot
-### Read tables
-```{r}
-# read tables
-prefix <- "../../results/all_clusters_pass1/DEGs/DEG_tables/"
-e3.male.df <- read.table(paste0(prefix,"E3PM_vs_E3CM_DEGs.tsv"),
-                         sep = "\t", 
-                         header = TRUE)
-e4.male.df <- read.table(paste0(prefix,"E4PM_vs_E4CM_DEGs.tsv"),
-                         sep = "\t", 
-                         header = TRUE)
-e3.female.df <- read.table(paste0(prefix,"E3PF_vs_E3CF_DEGs.tsv"),
-                           sep = "\t", 
-                           header = TRUE)
-
-e4.female.df <- read.table(paste0(prefix,"E4PF_vs_E4CF_DEGs.tsv"),
-                           sep = "\t", 
-                           header = TRUE)
-
-# filter
-e3.male.df <- e3.male.df[e3.male.df$p_val_adj < 0.05,]
-e4.male.df <- e4.male.df[e4.male.df$p_val_adj < 0.05,]
-e3.female.df <- e3.female.df[e3.female.df$p_val_adj < 0.05,]
-e4.female.df <- e4.female.df[e4.female.df$p_val_adj < 0.05,]
-```
-
-### Up-regulated PLX vs cntrl
-```{r upset_plots,eval=FALSE}
-# loop through cell types
-clusters <- levels(mouse.annotated$annotated_clusters)
-
-for (i in clusters) {
-  # Subset df by cluster
-  e3.male <- e3.male.df[e3.male.df$cluster == i,]
-  e4.male <- e4.male.df[e4.male.df$cluster == i,]
-  e3.female <- e3.female.df[e3.female.df$cluster == i,]
-  e4.female <- e4.female.df[e4.female.df$cluster == i,]
-  
-  # Subset lists
-  e3.male.up <- e3.male[e3.male$avg_log2FC > 0,][,"gene"]
-  e4.male.up <- e4.male[e4.male$avg_log2FC > 0,][,"gene"]
-  e3.female.up <- e3.female[e3.female$avg_log2FC > 0,][,"gene"]
-  e4.female.up <- e4.female[e4.female$avg_log2FC > 0,][,"gene"]
-  list.input <- list("E3PM vs E3CM Up-regulated" = e3.male.up,
-                     "E4PM vs E4CM Up-regulated" = e4.male.up,
-                     "E3PF vs E3CF Up-regulated" = e3.female.up,
-                     "E4PF vs E4CF Up-regulated" = e4.female.up)
-  data <- fromList(list.input)
-  
-  # pick axes max
-  max <- max(length(e3.male.up), length(e4.male.up),
-             length(e3.female.up), length(e4.female.up))
-  max <- max + 200
-  if (max > 1000) {
-    max <- plyr::round_any(max, 1000, f = ceiling)
-  } else {
-    max <- plyr::round_any(max, 100, f = ceiling)
-  }
-  
-  # store names in reverse order (this orders on upset plot)
-  names <- c("E4PF vs E4CF Up-regulated",
-             "E3PF vs E3CF Up-regulated",
-             "E4PM vs E4CM Up-regulated",
-             "E3PM vs E3CM Up-regulated")
-  
-  # plot
-  upset_gene <- ComplexUpset::upset(data, 
-                      names,
-                      set_sizes=(
-                        upset_set_size()
-                        + geom_text(aes(label=..count..), hjust=1.1, stat='count')
-                        + expand_limits(y=max)),
-                      queries = list(upset_query("E3PM vs E3CM Up-regulated", fill = "#f75959"),
-                                     upset_query("E4PM vs E4CM Up-regulated", fill = "#fbff0a"),
-                                     upset_query("E3PF vs E3CF Up-regulated", fill = "#63e851"),
-                                     upset_query("E4PF vs E4CF Up-regulated", fill = "#0271f0")),
-                      base_annotations = list('Intersection size' = (
-                        intersection_size(bar_number_threshold=1, width=0.5)
-                        + scale_y_continuous(expand=expansion(mult=c(0, 0.05)),limits = c(0,max)) # space on top
-                        + theme(
-                              # hide grid lines
-                              panel.grid.major=element_blank(),
-                              panel.grid.minor=element_blank(),
-                              # show axis lines
-                              axis.line=element_line(colour='black')))),
-                      stripes = upset_stripes(
-                        geom=geom_segment(size=12),  # make the stripes larger
-                        colors=c('grey95', 'white')),
-                      # to prevent connectors from getting the colorured
-                      # use `fill` instead of `color`, together with `shape='circle filled'`
-                      matrix = intersection_matrix(
-                        geom=geom_point(
-                          shape='circle filled',
-                          size=3,
-                          stroke=0.45)),
-                      sort_sets=FALSE,
-                      sort_intersections='descending'
-                    )
-  upset_gene <- upset_gene + ggtitle(paste0(i," Up-regulated, adj_p_val < 0.05"))
-  i <- gsub(" ","_",i)
-  i <- gsub("/","_",i)
-  i <- gsub("-","_",i)
-  prefix <- "../../results/all_clusters_pass1/DEGs/upset/upreg_"
-  pdf(paste0(prefix, tolower(i), ".pdf"), height = 6, width = 10)
-  print(upset_gene)
-  dev.off()
-}
-```
-
-### Down-regulated PLX vs cntrl
-```{r upset_plots,eval=FALSE}
-# loop through cell types
-clusters <- levels(mouse.annotated$annotated_clusters)
-
-for (i in clusters) {
-  # Subset df by cluster
-  e3.male <- e3.male.df[e3.male.df$cluster == i,]
-  e4.male <- e4.male.df[e4.male.df$cluster == i,]
-  e3.female <- e3.female.df[e3.female.df$cluster == i,]
-  e4.female <- e4.female.df[e4.female.df$cluster == i,]
-  
-  # Subset lists
-  e3.male.down <- e3.male[e3.male$avg_log2FC < 0,][,"gene"]
-  e4.male.down <- e4.male[e4.male$avg_log2FC < 0,][,"gene"]
-  e3.female.down <- e3.female[e3.female$avg_log2FC < 0,][,"gene"]
-  e4.female.down <- e4.female[e4.female$avg_log2FC < 0,][,"gene"]
-  list.input <- list("E3PM vs E3CM Down-regulated" = e3.male.down,
-                     "E4PM vs E4CM Down-regulated" = e4.male.down,
-                     "E3PF vs E3CF Down-regulated" = e3.female.down,
-                     "E4PF vs E4CF Down-regulated" = e4.female.down)
-  data <- fromList(list.input)
-  
-  # pick axes max
-  max <- max(length(e3.male.down), length(e4.male.down),
-             length(e3.female.down), length(e4.female.down))
-  max <- max + 200
-  if (max > 1000) {
-    max <- plyr::round_any(max, 1000, f = ceiling)
-  } else {
-    max <- plyr::round_any(max, 100, f = ceiling)
-  }
-  
-  # store names in reverse order (this orders on upset plot)
-  names <- c("E4PF vs E4CF Down-regulated",
-             "E3PF vs E3CF Down-regulated",
-             "E4PM vs E4CM Down-regulated",
-             "E3PM vs E3CM Down-regulated")
-  
-  # plot
-  upset_gene <- ComplexUpset::upset(data, 
-                      names,
-                      set_sizes=(
-                        upset_set_size()
-                        + geom_text(aes(label=..count..), hjust=1.1, stat='count')
-                        + expand_limits(y=max)),
-                      queries = list(upset_query("E3PM vs E3CM Down-regulated", fill = "#f75959"),
-                                     upset_query("E4PM vs E4CM Down-regulated", fill = "#fbff0a"),
-                                     upset_query("E3PF vs E3CF Down-regulated", fill = "#63e851"),
-                                     upset_query("E4PF vs E4CF Down-regulated", fill = "#0271f0")),
-                      base_annotations = list('Intersection size' = (
-                        intersection_size(bar_number_threshold=1, width=0.5)
-                        + scale_y_continuous(expand=expansion(mult=c(0, 0.05)),limits = c(0,max)) # space on top
-                        + theme(
-                              # hide grid lines
-                              panel.grid.major=element_blank(),
-                              panel.grid.minor=element_blank(),
-                              # show axis lines
-                              axis.line=element_line(colour='black')))),
-                      stripes = upset_stripes(
-                        geom=geom_segment(size=12),  # make the stripes larger
-                        colors=c('grey95', 'white')),
-                      # to prevent connectors from getting the colorured
-                      # use `fill` instead of `color`, together with `shape='circle filled'`
-                      matrix = intersection_matrix(
-                        geom=geom_point(
-                          shape='circle filled',
-                          size=3,
-                          stroke=0.45)),
-                      sort_sets=FALSE,
-                      sort_intersections='descending'
-                    )
-  upset_gene <- upset_gene + ggtitle(paste0(i," Down-regulated, adj_p_val < 0.05"))
-  i <- gsub(" ","_",i)
-  i <- gsub("/","_",i)
-  i <- gsub("-","_",i)
-  prefix <- "../../results/all_clusters_pass1/DEGs/upset/downreg_"
-  pdf(paste0(prefix, tolower(i), ".pdf"), height = 6, width = 10)
-  print(upset_gene)
-  dev.off()
-}
-```
-
 ## Volcano
 ```{r volcano_plot, message=FALSE, eval=FALSE}
-variables <- c("E3PM_vs_E3CM","E4PM_vs_E4CM",
-               "E3PF_vs_E3CF","E4PF_vs_E4CF",
-               "E4CM_vs_E3CM","E4CF_vs_E3CF")
+variables <- c("E4_F_vs_E3_F","E4_M_vs_E3_M")
 all_clusters <- levels(mouse.annotated$annotated_clusters)
-prefix <- "../../results/all_clusters_pass1/DEGs/"
 
 for (i in variables) {
   
   # read DEG file
-  treatment_vs_control <- read.delim(paste0(prefix,"DEG_tables/",i,"_DEGs.tsv"))
+  if (i == "E4_F_vs_E3_F") {
+    treatment_vs_control <- 
+      read.delim(paste0(out, "DEGs/DEG_tables/E4_F_vs_E3_F_DEGs.tsv"), sep = "\t")
+  } else {
+    treatment_vs_control <-
+      read.delim(paste0(out, "DEGs/DEG_tables/E4_M_vs_E3_M_DEGs.tsv"), sep = "\t")
+  }
   
   # assign colors
   color_values <- vector()
@@ -1231,9 +654,9 @@ for (i in variables) {
         
       # subset genes to label
       up <- data[data$color_adjpval_0.05 == 1,]
-      up10 <- up[1:15,]
+      up10 <- up[1:10,]
       down <- data[data$color_adjpval_0.05 == 2,]
-      down10 <- down[1:15,]
+      down10 <- down[1:10,]
       
       # set manual colors
       if (!1 %in% unique(data$color_adjpval_0.05)) {
@@ -1293,7 +716,11 @@ for (i in variables) {
       clus <- gsub(" ","_",clus)
       clus <- gsub("/","_",clus)
       clus <- gsub("-","_",clus)
-      path <- paste0(prefix,"volcano/",i,"/",i,"_",clus,"_volcano.pdf")
+      if (i == "E4_F_vs_E3_F") {
+        path <- paste0(out, "DEGs/volcano/E4_F_vs_E3_F/", tolower(clus),"_female_volcano")
+      } else {
+        path <- paste0(out, "DEGs/volcano/E4_M_vs_E3_M/", tolower(clus),"_male_volcano")      
+      }
       pdf(paste(path,".pdf"), height = 8, width = 8)
       print(p)
       dev.off()
@@ -1306,15 +733,15 @@ for (i in variables) {
 ```
 
 ## Metascape input
-```{r}
+```{r metascape_input, eval=FALSE, warning=FALSE}
 # set variables
 thresh <- 0.05
 
 # get file list
-files <- list.files("../../results/all_clusters_pass1/DEGs/DEG_tables/")
+files <- list.files(paste0(out, "DEGs/DEG_tables/"))
 keep <- grep("_DEGs.tsv", files)
 files <- files[keep]
-files <- paste0("../../results/all_clusters_pass1/DEGs/DEG_tables/", files)
+files <- paste0(out, "DEGs/DEG_tables/", files)
 
 # get cell types
 cell_types <- levels(mouse.annotated$annotated_clusters)
@@ -1340,11 +767,9 @@ for (i in 1:length(files)) {
     # file name
     clus <- j
     clus <- gsub(" ","_",clus)
-    clus <- gsub("/","_",clus)
-    clus <- gsub("-","_",clus)
-    file <- gsub("../../results/all_clusters_pass1/DEGs/DEG_tables/", "", files[i])
+    file <- gsub(paste0(out,"DEGs/DEG_tables/"), "", files[i])
     file <- gsub("_DEGs.tsv", "", file)
-    file <- paste0("../../results/all_clusters_pass1/DEGs/metascape_input/", file, "/", clus)
+    file <- paste0(out, "DEGs/metascape_input/", file, "/", clus)
      
     # save
     if(length(up) > 10) {
@@ -1363,4 +788,81 @@ for (i in 1:length(files)) {
     }
   } # end j for loop
 } # end i for loop
+```
+
+## Upset plot
+```{r upset_plots, eval=FALSE, warning=FALSE}
+# read tables
+female.df <- read.table(paste0(out, "DEGs/DEG_tables/E4_F_vs_E3_F_DEGs.tsv"),
+                         sep = "\t", 
+                        header = TRUE)
+male.df <- read.table(paste0(out, "DEGs/DEG_tables/E4_M_vs_E3_M_DEGs.tsv"),
+                         sep = "\t", header = TRUE)
+
+# filter tables
+female.df <- female.df[female.df$p_val_adj < 0.05,]
+male.df <- male.df[male.df$p_val_adj < 0.05,]
+
+# loop through clusters
+clusters <- levels(mouse.annotated$annotated_clusters)
+for (i in clusters) {
+  # Subset df by cluster
+  print(i)
+  female <- subset(female.df, female.df$cluster == i)
+  sex <- subset(male.df, male.df$cluster == i)
+  
+  # Subset lists
+  female_up <- subset(female$gene, female$avg_log2FC > 0)
+  female_down <- subset(female$gene, female$avg_log2FC < 0)
+  male_up <- subset(sex$gene, sex$avg_log2FC > 0)
+  male_down <- subset(sex$gene, sex$avg_log2FC < 0)
+  list_input <- list("E4 Female Up-regulated" = female_up,
+                     "E4 Male Up-regulated" = male_up,
+                     "E4 Female Down-regulated" = female_down,
+                     "E4 Male Down-regulated" = male_down)
+  data <- fromList(list_input)
+  
+  # store names
+  names <- c("E4 Male Down-regulated","E4 Female Down-regulated",
+             "E4 Male Up-regulated","E4 Female Up-regulated")
+  
+  # plot
+  upset_gene <- ComplexUpset::upset(data, 
+                      names,
+                      set_sizes=(
+                        upset_set_size()
+                        + geom_text(aes(label=..count..), hjust=1.1, stat='count')
+                        + expand_limits(y=1000)),
+                      queries = list(upset_query("E4 Female Up-regulated", fill = "red"),
+                                     upset_query("E4 Male Up-regulated", fill = "red"),
+                                     upset_query("E4 Female Down-regulated", fill = "blue"),
+                                     upset_query("E4 Male Down-regulated", fill = "blue")),
+                      base_annotations = list('Intersection size' = (
+                        intersection_size(bar_number_threshold=1, width=0.5)
+                        + scale_y_continuous(expand=expansion(mult=c(0, 0.05)),limits = c(0,800)) # space on top
+                        + theme(
+                              # hide grid lines
+                              panel.grid.major=element_blank(),
+                              panel.grid.minor=element_blank(),
+                              # show axis lines
+                              axis.line=element_line(colour='black')))),
+                      stripes = upset_stripes(
+                        geom=geom_segment(size=12),  # make the stripes larger
+                        colors=c('grey95', 'white')),
+                      # to prevent connectors from getting the colorured
+                      # use `fill` instead of `color`, together with `shape='circle filled'`
+                      matrix = intersection_matrix(
+                        geom=geom_point(
+                          shape='circle filled',
+                          size=3,
+                          stroke=0.45)),
+                      sort_sets=FALSE,
+                      sort_intersections='descending'
+                    )
+  upset_gene <- upset_gene + ggtitle(paste0(i,", adj_p_val < 0.05"))
+  i <- gsub(" ","_",i)
+  pdf(paste0(out, "DEGs/upset/",tolower(i),"_upset.pdf"), height = 6, width = 8)
+  print(upset_gene)
+  dev.off()
+}
 ```
