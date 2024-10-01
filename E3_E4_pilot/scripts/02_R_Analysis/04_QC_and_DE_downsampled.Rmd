@@ -28,7 +28,8 @@ library(gridExtra)    # grid.arrange()
 library(gtools)       # smartbind()
 library(parallel)     # detectCores()
 library(plotly)       # plot_ly()
-library(Seurat)       # DimPlot()\
+library(Seurat)       # DimPlot()
+library(ShinyCell)    # createConfig()
 library(tidyr)        # %>%
 library(UpSetR)       # fromList()
 ```
@@ -67,7 +68,8 @@ remove(mouse.annotated)
 ```{r 2D_annotated_umap}
 # manually set colors
 cluster_colors <- c("#B5B9BA", # Pericytes and SMCs
-                    "#40BBFF", # Endothelial
+                    "#3385BB", # BECs
+                    "#40BBFF", # LECs
                     "#a5d5a9", # B cells
                     "#5dbd64", # Plasma cells
                     "#1c7e24", # T and NK cells
@@ -75,6 +77,7 @@ cluster_colors <- c("#B5B9BA", # Pericytes and SMCs
                     "#E42622", # Dendritic cells
                     "#FBB268", # Neutrophils
                     "#FE8D19", # Macrophages
+                    "#DE9E83", # Myeloid precursors
                     "#A6CEE3", # Mast cells
                     "#9D7BBA", # Fibroblasts
                     "#977899") # Schwann cells
@@ -117,6 +120,7 @@ three.dim
 
 ## Cluster markers
 ```{r cluster_markers_violin}
+Idents(mouse.downsample) <- "annotated_clusters"
 goi <- c("Pdgfrb","Acta2","Vwf","Cldn5","Pecam1","Flt4","Prox1","Lyve1","Ptprc",
          "Cd19","Ms4a1","Ighd","Cd3e","Trbc2","Il7r","Nkg7","Klrb1b","Klrb1c",
          "Gata3","Rora","Itgax","H2-Eb1","Ccr2","Ly6c2","Lyz2","Ly6g","Itgam",
@@ -129,6 +133,13 @@ v <- VlnPlot(mouse.downsample,
              stack = TRUE,
              cols = cluster_colors)
 v
+```
+
+```{r save_ann_cluster_violin, echo=FALSE}
+path <- paste0(out, "markers/")
+pdf(paste0(path, "sandro_markers_violin_annotated.pdf"), width = 10, height = 8)
+v
+dev.off()
 ```
 
 ## Split UMAP
@@ -477,7 +488,7 @@ dev.off()
 
 # Differential expression
 ## E4 female vs E3 female within each cluster
-```{r isoform_de, eval=FALSE}
+```{r isoform_female_de, eval=FALSE}
 # initialize variables
 cell_types <- levels(mouse.downsample$annotated_clusters)
 female.df <- data.frame()
@@ -516,7 +527,7 @@ write.table(female.df,
 ```
 
 ## E4 male vs E3 male within each cluster
-```{r sex_de, eval=FALSE}
+```{r isoform_male_de, eval=FALSE}
 # initialize variable
 cell_types <- levels(mouse.downsample$annotated_clusters)
 male.df <- data.frame()
@@ -588,6 +599,18 @@ male.df2 <- male.df %>%
 
 # master table
 df <- smartbind(female.df2, male.df2)
+df[is.na(df)] <- 0
+
+# cell types with 0 DEGs in every comparison are not shown
+# add column with all 0s
+cell_types <- c(levels(mouse.downsample$annotated_clusters), "direction")
+for (i in cell_types) {
+  if (!i %in% colnames(df)) {
+    print(i)
+    df[[i]] <- 0
+  }
+}
+df
 
 # save
 write.table(df, 
@@ -598,7 +621,7 @@ write.table(df,
 ```
 
 ## DEG heatmap
-```{r DEG_heatmap, eval=FALSE, warning=FALSE}
+```{r DEG_heatmap, eval=FALSE}
 # set heatmap colors and names
 paletteLength <- 100
 myColor <- colorRampPalette(c("white","#f0eb9e","darkgreen"))(paletteLength)
@@ -626,7 +649,7 @@ pheatmap::pheatmap(df2,
 ```
 
 ## Volcano
-```{r volcano_plot, message=FALSE, eval=FALSE}
+```{r volcano_plot, eval=FALSE}
 variables <- c("E4_F_vs_E3_F","E4_M_vs_E3_M")
 all_clusters <- levels(mouse.downsample$annotated_clusters)
 
@@ -739,7 +762,7 @@ for (i in variables) {
       } else {
         path <- paste0(out, "DEGs/volcano/E4_M_vs_E3_M/", tolower(clus),"_male_volcano")      
       }
-      pdf(paste(path,".pdf"), height = 8, width = 8)
+      pdf(paste0(path,".pdf"), height = 8, width = 8)
       print(p)
       dev.off()
       
@@ -751,7 +774,7 @@ for (i in variables) {
 ```
 
 ## Metascape input
-```{r metascape_input, eval=FALSE, warning=FALSE}
+```{r metascape_input, eval=FALSE}
 # set variables
 thresh <- 0.05
 
@@ -809,7 +832,7 @@ for (i in 1:length(files)) {
 ```
 
 ## Upset plot
-```{r upset_plots, eval=FALSE, warning=FALSE}
+```{r upset_plots, eval=FALSE}
 # read tables
 female.df <- read.table(paste0(out, "DEGs/DEG_tables/E4_F_vs_E3_F_DEGs.tsv"),
                          sep = "\t", 
@@ -823,6 +846,8 @@ male.df <- male.df[male.df$p_val_adj < 0.05,]
 
 # loop through clusters
 clusters <- levels(mouse.downsample$annotated_clusters)
+clusters <- clusters[!clusters %in% "LECs"]
+
 for (i in clusters) {
   # Subset df by cluster
   print(i)
@@ -850,14 +875,14 @@ for (i in clusters) {
                       set_sizes=(
                         upset_set_size()
                         + geom_text(aes(label=..count..), hjust=1.1, stat='count')
-                        + expand_limits(y=600)),
+                        + expand_limits(y=500)),
                       queries = list(upset_query("E4 Female Up-regulated", fill = "red"),
                                      upset_query("E4 Male Up-regulated", fill = "red"),
                                      upset_query("E4 Female Down-regulated", fill = "blue"),
                                      upset_query("E4 Male Down-regulated", fill = "blue")),
                       base_annotations = list('Intersection size' = (
                         intersection_size(bar_number_threshold=1, width=0.5)
-                        + scale_y_continuous(expand=expansion(mult=c(0, 0.05)),limits = c(0,600)) # space on top
+                        + scale_y_continuous(expand=expansion(mult=c(0, 0.05)),limits = c(0,400)) # space on top
                         + theme(
                               # hide grid lines
                               panel.grid.major=element_blank(),
@@ -884,3 +909,36 @@ for (i in clusters) {
   dev.off()
 }
 ```
+
+
+# Shiny App
+```{r shiny_app, eval=FALSE}
+# create new object
+shiny.obj <- mouse.downsample
+VariableFeatures(shiny.obj) <- shiny.obj@assays$SCT@var.features
+
+# set default params
+DefaultAssay(shiny.obj) <- "RNA"
+Idents(shiny.obj) <- "annotated_clusters"
+
+# create config
+names <- colnames(shiny.obj@meta.data)
+names <- names[c(22,23,2:21)]
+sc.config <- createConfig(obj = shiny.obj,
+                          meta.to.include = names)
+
+# change wd
+setwd("../../results/all_clusters")
+
+# output shiny app folder
+makeShinyApp(obj = shiny.obj, 
+             scConf = sc.config, 
+             gene.mapping = TRUE,
+             shiny.title = "All Clusters")
+
+# manual config edits
+sc1conf <- readRDS("shinyApp/sc1conf.rds")
+sc1conf[2,4] <- "#B5B9BA|#3385BB|#40BBFF|#a5d5a9|#5dbd64|#1c7e24|#F57C7C|#E42622|#FBB268|#FE8D19|#DE9E83|#A6CEE3|#9D7BBA|#977899"
+saveRDS(sc1conf, "shinyApp/sc1conf.rds")
+```
+

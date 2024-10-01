@@ -115,7 +115,7 @@ v <- VlnPlot(mouse.annotated,
 v
 ```
 
-```{r}
+```{r save_ann_markers, echo=FALSE}
 path <- paste0(out, "markers/")
 pdf(paste0(path, "sandro_markers_violin_annotated.pdf"), width = 10, height = 8)
 v
