@@ -2,7 +2,7 @@
 title: "E3/E4 Mice Meningeal Dura scRNAseq"
 subtitle: "Filtering, Normalization, Clustering"
 author: "Kennedi Todd"
-date: "09/29/2024"
+date: "09/30/2024"
 output:
   html_document:
     theme: cerulean
@@ -1041,14 +1041,14 @@ DimPlot(mouse.unannotated,
 
 ## Choose resolution
 ```{r choose_res}
-mouse.unannotated$seurat_clusters <- mouse.unannotated$SCT_snn_res.0.2
+mouse.unannotated$seurat_clusters <- mouse.unannotated$SCT_snn_res.0.4
 
 DimPlot(mouse.unannotated,
-        group.by = "SCT_snn_res.0.2",
+        group.by = "SCT_snn_res.0.4",
         label = TRUE)
 
 DimPlot(mouse.unannotated,
-        group.by = "SCT_snn_res.0.2",
+        group.by = "SCT_snn_res.0.4",
         label = TRUE,
         dims = c(2,3))
 ```
