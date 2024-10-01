@@ -35,7 +35,7 @@ library(UpSetR)       # fromList()
 
 ## Variables and functions
 ```{r set_variables_and_functions}
-out <- "../../results/pass_1/all_clusters/"
+out <- "../../results/all_clusters/"
 sample_order <- c("E3.M","E3.F","E4.M","E4.F")
 sample_colors <- c("#26946A","#1814A1","#EAC941","#DF5F00")
 sample_order2 <- c("Male E3", "Male E4", "Female E3", "Female E4")
@@ -55,7 +55,8 @@ mouse.annotated <- readRDS("../../rObjects/annotated_obj.rds")
 ```{r 2D_annotated_umap}
 # manually set colors
 cluster_colors <- c("#B5B9BA", # Pericytes and SMCs
-                    "#40BBFF", # Endothelial
+                    "#3385BB", # BECs
+                    "#40BBFF", # LECs
                     "#a5d5a9", # B cells
                     "#5dbd64", # Plasma cells
                     "#1c7e24", # T and NK cells
@@ -63,6 +64,7 @@ cluster_colors <- c("#B5B9BA", # Pericytes and SMCs
                     "#E42622", # Dendritic cells
                     "#FBB268", # Neutrophils
                     "#FE8D19", # Macrophages
+                    "#DE9E83", # Myeloid precursors
                     "#A6CEE3", # Mast cells
                     "#9D7BBA", # Fibroblasts
                     "#977899") # Schwann cells
@@ -100,8 +102,8 @@ three.dim
 ## Cluster markers
 ```{r cluster_markers_violin}
 goi <- c("Pdgfrb","Acta2","Vwf","Cldn5","Pecam1","Flt4","Prox1","Lyve1","Ptprc",
-         "Cd19","Ms4a1","Ighd","Cd3e","Trbc2","Il7r","Nkg7","Klrb1b","Klrb1c",
-         "Gata3","Rora","Itgax","H2-Eb1","Ccr2","Ly6c2","Lyz2","Ly6g","Itgam",
+         "Cd19","Ms4a1","Ighd","Igha","Sdc1","Cd3e","Trbc2","Il7r","Nkg7","Klrb1b",
+         "Klrb1c","Gata3","Rora","Itgax","H2-Eb1","Ccr2","Ly6c2","Lyz2","Ly6g","Itgam",
          "Mrc1","Csf1r","Cd38","Mki67","Mcpt4","Ms4a2","Col1a2","Plp1")
 
 v <- VlnPlot(mouse.annotated,
@@ -112,6 +114,14 @@ v <- VlnPlot(mouse.annotated,
              cols = cluster_colors)
 v
 ```
+
+```{r}
+path <- paste0(out, "markers/")
+pdf(paste0(path, "sandro_markers_violin_annotated.pdf"), width = 10, height = 8)
+v
+dev.off()
+```
+
 
 ## Split UMAP
 ```{r split_umaps}
@@ -459,7 +469,7 @@ dev.off()
 
 # Differential expression
 ## E4 female vs E3 female within each cluster
-```{r isoform_de, eval=FALSE}
+```{r female_isoform_de, eval=FALSE}
 # initialize variables
 cell_types <- levels(mouse.annotated$annotated_clusters)
 female.df <- data.frame()
@@ -495,10 +505,13 @@ female.df <- female.df[,c(6,7,1,5,2,3,4,8)]
 write.table(female.df, 
             file = paste0(out, "DEGs/DEG_tables/E4_F_vs_E3_F_DEGs.tsv"), 
             sep = "\t", quote = FALSE, row.names = FALSE)
+
+# print cell types that don't have DEGs
+levels(mouse.annotated$annotated_clusters)[!levels(mouse.annotated$annotated_clusters) %in% unique(female.df$cluster)]
 ```
 
 ## E4 male vs E3 male within each cluster
-```{r sex_de, eval=FALSE}
+```{r male_isoform_de, eval=FALSE}
 # initialize variable
 cell_types <- levels(mouse.annotated$annotated_clusters)
 male.df <- data.frame()
@@ -534,6 +547,9 @@ male.df <- male.df[,c(6,7,1,5,2,3,4,8)]
 write.table(male.df, 
             file = paste0(out, "DEGs/DEG_tables/E4_M_vs_E3_M_DEGs.tsv"), 
             sep = "\t",quote = FALSE, row.names = FALSE)
+
+# print cell types that don't have DEGs
+levels(mouse.annotated$annotated_clusters)[!levels(mouse.annotated$annotated_clusters) %in% unique(male.df$cluster)]
 ```
 
 ## Compare DEGs
@@ -570,6 +586,18 @@ male.df2 <- male.df %>%
 
 # master table
 df <- smartbind(female.df2, male.df2)
+df[is.na(df)] <- 0
+df
+
+# cell types with 0 DEGs in every comparison are not shown
+# add column with all 0s
+cell_types <- c(levels(mouse.annotated$annotated_clusters), "direction")
+for (i in cell_types) {
+  if (!i %in% colnames(df)) {
+    print(i)
+    df[[i]] <- 0
+  }
+}
 
 # save
 write.table(df, 
@@ -581,7 +609,7 @@ write.table(df,
 
 
 ## DEG heatmap
-```{r DEG_heatmap, eval=FALSE, warning=FALSE}
+```{r DEG_heatmap, eval=FALSE}
 # set heatmap colors and names
 paletteLength <- 100
 myColor <- colorRampPalette(c("white","#f0eb9e","darkgreen"))(paletteLength)
@@ -608,7 +636,7 @@ pheatmap::pheatmap(df2,
 ```
 
 ## Volcano
-```{r volcano_plot, message=FALSE, eval=FALSE}
+```{r volcano_plot, eval=FALSE}
 variables <- c("E4_F_vs_E3_F","E4_M_vs_E3_M")
 all_clusters <- levels(mouse.annotated$annotated_clusters)
 
@@ -733,7 +761,7 @@ for (i in variables) {
 ```
 
 ## Metascape input
-```{r metascape_input, eval=FALSE, warning=FALSE}
+```{r metascape_input, eval=FALSE}
 # set variables
 thresh <- 0.05
 
@@ -791,7 +819,7 @@ for (i in 1:length(files)) {
 ```
 
 ## Upset plot
-```{r upset_plots, eval=FALSE, warning=FALSE}
+```{r upset_plots, eval=FALSE}
 # read tables
 female.df <- read.table(paste0(out, "DEGs/DEG_tables/E4_F_vs_E3_F_DEGs.tsv"),
                          sep = "\t", 
@@ -803,8 +831,10 @@ male.df <- read.table(paste0(out, "DEGs/DEG_tables/E4_M_vs_E3_M_DEGs.tsv"),
 female.df <- female.df[female.df$p_val_adj < 0.05,]
 male.df <- male.df[male.df$p_val_adj < 0.05,]
 
-# loop through clusters
+# get cell types and remove any with 0 DEGs in every comparison
 clusters <- levels(mouse.annotated$annotated_clusters)
+clusters <- clusters[!clusters %in% "LECs"]
+
 for (i in clusters) {
   # Subset df by cluster
   print(i)
@@ -832,14 +862,14 @@ for (i in clusters) {
                       set_sizes=(
                         upset_set_size()
                         + geom_text(aes(label=..count..), hjust=1.1, stat='count')
-                        + expand_limits(y=1000)),
+                        + expand_limits(y=1100)),
                       queries = list(upset_query("E4 Female Up-regulated", fill = "red"),
                                      upset_query("E4 Male Up-regulated", fill = "red"),
                                      upset_query("E4 Female Down-regulated", fill = "blue"),
                                      upset_query("E4 Male Down-regulated", fill = "blue")),
                       base_annotations = list('Intersection size' = (
                         intersection_size(bar_number_threshold=1, width=0.5)
-                        + scale_y_continuous(expand=expansion(mult=c(0, 0.05)),limits = c(0,800)) # space on top
+                        + scale_y_continuous(expand=expansion(mult=c(0, 0.05)),limits = c(0,1000)) # space on top
                         + theme(
                               # hide grid lines
                               panel.grid.major=element_blank(),
