@@ -9,5 +9,3 @@
 - **04_QC_and_DE_downsampled.Rmd**
   - All samples downsampled to 3000 cells
   - Quality control and differential expression of the annotated seurat object
-- **05_recluster_endothelial.Rmd**
-  - Recluster the endothelial population to identify subpopulations
