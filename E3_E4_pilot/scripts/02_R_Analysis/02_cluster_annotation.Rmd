@@ -840,9 +840,9 @@ mouse.annotated <- NormalizeData(mouse.annotated)
 cluster_colors <- c("#B5B9BA", # Pericytes and SMCs
                     "#3385BB", # BECs
                     "#40BBFF", # LECs
-                    "#a5d5a9", # B cells
-                    "#5dbd64", # Plasma cells
-                    "#1c7e24", # T and NK cells
+                    "#A5D5A9", # B cells
+                    "#5DBD64", # Plasma cells
+                    "#1C7E24", # T and NK cells
                     "#F57C7C", # ILCs
                     "#E42622", # Dendritic cells
                     "#FBB268", # Neutrophils
@@ -887,7 +887,6 @@ remove(umap1,umap2)
 # save object
 saveRDS(mouse.annotated,"../../rObjects/annotated_obj.rds")
 ```
-
 
 ## Automatically detect markers
 ```{r run_presto_annotated}

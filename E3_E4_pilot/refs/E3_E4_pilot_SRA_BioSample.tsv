@@ -1,0 +1,5 @@
+sample_name	organism	strain	age	collection_date	geo_loc_name	tissue	apoe_isoform	sex
+E3.F	Mus musculus	C57BL/6	14 months	?	USA	meninges	E3	F
+E3.M	Mus musculus	C57BL/6	14 months	?	USA	meninges	E3	M
+E4.F	Mus musculus	C57BL/6	14 months	?	USA	meninges	E4	F
+E4.M	Mus musculus	C57BL/6	14 months	?	USA	meninges	E4	M

@@ -57,9 +57,9 @@ mouse.annotated <- readRDS("../../rObjects/annotated_obj.rds")
 cluster_colors <- c("#B5B9BA", # Pericytes and SMCs
                     "#3385BB", # BECs
                     "#40BBFF", # LECs
-                    "#a5d5a9", # B cells
-                    "#5dbd64", # Plasma cells
-                    "#1c7e24", # T and NK cells
+                    "#A5D5A9", # B cells
+                    "#5DBD64", # Plasma cells
+                    "#1C7E24", # T and NK cells
                     "#F57C7C", # ILCs
                     "#E42622", # Dendritic cells
                     "#FBB268", # Neutrophils
@@ -76,6 +76,14 @@ umap <- DimPlot(object = mouse.annotated,
                 group.by = "annotated_clusters",
                 cols = cluster_colors)
 umap
+```
+
+```{r save_annotated_umap, eval=FALSE, echo=FALSE}
+path <- paste0(out, "UMAP/annotated_clusters_dim1&2.pdf")
+pdf(path, width = 7, height = 4)
+umap
+dev.off()
+remove(umap)
 ```
 
 ## 3D UMAP
@@ -679,12 +687,20 @@ for (i in variables) {
     num <- subset(data, p_val_adj < 0.05)
     num <- nrow(num)
     if(num != 0) {
-        
+      
       # subset genes to label
       up <- data[data$color_adjpval_0.05 == 1,]
-      up10 <- up[1:10,]
+      up.sig <- up[order(up$p_val_adj),][1:15,]
+      up.lfc <- up[order(up$avg_log2FC, decreasing = TRUE),][1:15,]
+      up30 <- rbind(up.sig,up.lfc)
+      up30 <- unique(up30)
+      up30 <- up30[rowSums(is.na(up30)) != ncol(up30), ]
       down <- data[data$color_adjpval_0.05 == 2,]
-      down10 <- down[1:10,]
+      down.sig <- down[order(down$p_val_adj),][1:15,]
+      down.lfc <- down[order(down$avg_log2FC, decreasing = FALSE),][1:15,]
+      down30 <- rbind(down.sig,down.lfc)
+      down30 <- unique(down30)
+      down30 <- down30[rowSums(is.na(down30)) != ncol(down30), ]
       
       # set manual colors
       if (!1 %in% unique(data$color_adjpval_0.05)) {
@@ -725,13 +741,13 @@ for (i in variables) {
                            colour = "#000000",
                            linetype = "dashed") +
         ggtitle(paste0(j,"\n",i,", p_val_adj < 0.05")) +
-        geom_text_repel(data = up10,
+        geom_text_repel(data = up30,
                         aes(x = avg_log2FC, y= -log10(p_val), label = gene), 
                         color = "maroon", 
                         fontface="italic",
                         max.overlaps = getOption("ggrepel.max.overlaps", default = 30)
                         ) +
-        geom_text_repel(data = down10,
+        geom_text_repel(data = down30,
                         aes(x = avg_log2FC, y= -log10(p_val), label = gene), 
                         color = "navyblue", 
                         fontface="italic",
@@ -819,80 +835,162 @@ for (i in 1:length(files)) {
 ```
 
 ## Upset plot
-```{r upset_plots, eval=FALSE}
+```{r upset_plots}
 # read tables
-female.df <- read.table(paste0(out, "DEGs/DEG_tables/E4_F_vs_E3_F_DEGs.tsv"),
-                         sep = "\t", 
-                        header = TRUE)
-male.df <- read.table(paste0(out, "DEGs/DEG_tables/E4_M_vs_E3_M_DEGs.tsv"),
-                         sep = "\t", header = TRUE)
+e4_vs_e3_females <- read.table(file = paste0(out, "DEGs/DEG_tables/E4_F_vs_E3_F_DEGs.tsv"),
+                               sep = "\t", 
+                               header = TRUE)
+e4_vs_e3_males <- read.table(file = paste0(out, "DEGs/DEG_tables/E4_M_vs_E3_M_DEGs.tsv"),
+                             sep = "\t", 
+                             header = TRUE)
 
 # filter tables
-female.df <- female.df[female.df$p_val_adj < 0.05,]
-male.df <- male.df[male.df$p_val_adj < 0.05,]
+e4_vs_e3_females <- e4_vs_e3_females[e4_vs_e3_females$p_val_adj < 0.05,]
+e4_vs_e3_males <- e4_vs_e3_males[e4_vs_e3_males$p_val_adj < 0.05,]
 
 # get cell types and remove any with 0 DEGs in every comparison
 clusters <- levels(mouse.annotated$annotated_clusters)
-clusters <- clusters[!clusters %in% "LECs"]
 
 for (i in clusters) {
+  
   # Subset df by cluster
   print(i)
-  female <- subset(female.df, female.df$cluster == i)
-  sex <- subset(male.df, male.df$cluster == i)
+  e4_vs_e3_females_ct <- subset(e4_vs_e3_females, e4_vs_e3_females$cluster == i)
+  e4_vs_e3_males_ct <- subset(e4_vs_e3_males, male.df$cluster == i)
+  if ((nrow(e4_vs_e3_females_ct) == 0) & (nrow(e4_vs_e3_males_ct) == 0)) {
+    print(paste0("skipping ", i))
+    next # skip iteration
+  }
   
-  # Subset lists
-  female_up <- subset(female$gene, female$avg_log2FC > 0)
-  female_down <- subset(female$gene, female$avg_log2FC < 0)
-  male_up <- subset(sex$gene, sex$avg_log2FC > 0)
-  male_down <- subset(sex$gene, sex$avg_log2FC < 0)
-  list_input <- list("E4 Female Up-regulated" = female_up,
-                     "E4 Male Up-regulated" = male_up,
-                     "E4 Female Down-regulated" = female_down,
-                     "E4 Male Down-regulated" = male_down)
-  data <- fromList(list_input)
+  # Subset by log2FC
+  e4_vs_e3_females_ct_up <- subset(e4_vs_e3_females_ct$gene, e4_vs_e3_females_ct$avg_log2FC > 0)
+  e4_vs_e3_females_ct_down <- subset(e4_vs_e3_females_ct$gene, e4_vs_e3_females_ct$avg_log2FC < 0)
+  e4_vs_e3_males_ct_up <- subset(e4_vs_e3_males$gene, e4_vs_e3_males_ct$avg_log2FC > 0)
+  e4_vs_e3_males_ct_down <- subset(e4_vs_e3_males$gene, e4_vs_e3_males_ct$avg_log2FC < 0)
+  axis_max <- max(length(e4_vs_e3_females_ct_down), length(e4_vs_e3_females_ct_up),
+                  length(e4_vs_e3_males_ct_down), length(e4_vs_e3_males_ct_up)) + 100
+  axis_max <- ceiling(axis_max / 100) * 100
+
+  # format in a list
+  list_input <- list(
+    "E4 vs E3 Female Up-regulated" = e4_vs_e3_females_ct_up,
+    "E4 vs E3 Male Up-regulated" = e4_vs_e3_males_ct_up,
+    "E4 vs E3 Female Down-regulated" = e4_vs_e3_females_ct_down,
+    "E4 vs E3 Male Down-regulated" = e4_vs_e3_males_ct_down
+  )
+  data <- UpSetR::fromList(list_input)
   
-  # store names
-  names <- c("E4 Male Down-regulated","E4 Female Down-regulated",
-             "E4 Male Up-regulated","E4 Female Up-regulated")
+  # You will specify the male and female groups by their group number
+  # Print this to help assign shapes/colors below
+  group_mapping <- data.frame(
+    Group_Number = 1:4,  # Group numbers (1-8)
+    Gene_Set_Name = sort(colnames(data))  # Sorted gene set names
+  )
   
-  # plot
-  upset_gene <- ComplexUpset::upset(data, 
-                      names,
-                      set_sizes=(
-                        upset_set_size()
-                        + geom_text(aes(label=..count..), hjust=1.1, stat='count')
-                        + expand_limits(y=1100)),
-                      queries = list(upset_query("E4 Female Up-regulated", fill = "red"),
-                                     upset_query("E4 Male Up-regulated", fill = "red"),
-                                     upset_query("E4 Female Down-regulated", fill = "blue"),
-                                     upset_query("E4 Male Down-regulated", fill = "blue")),
-                      base_annotations = list('Intersection size' = (
-                        intersection_size(bar_number_threshold=1, width=0.5)
-                        + scale_y_continuous(expand=expansion(mult=c(0, 0.05)),limits = c(0,1000)) # space on top
-                        + theme(
-                              # hide grid lines
-                              panel.grid.major=element_blank(),
-                              panel.grid.minor=element_blank(),
-                              # show axis lines
-                              axis.line=element_line(colour='black')))),
-                      stripes = upset_stripes(
-                        geom=geom_segment(size=12),  # make the stripes larger
-                        colors=c('grey95', 'white')),
-                      # to prevent connectors from getting the colorured
-                      # use `fill` instead of `color`, together with `shape='circle filled'`
-                      matrix = intersection_matrix(
-                        geom=geom_point(
-                          shape='circle filled',
-                          size=3,
-                          stroke=0.45)),
-                      sort_sets=FALSE,
-                      sort_intersections='descending'
-                    )
+  # Assign shapes based on group numbers
+  male_groups <- c("3","4")  # Male group numbers
+  female_groups <- c("1","2")  # Female group numbers
+  
+  # Assign colors and shapes based on specific group numbers
+  upregulated_groups <- c("2","4")
+  downregulated_groups <- c("1","3")
+  
+  # Create the basic UpSet plot (no dynamic colors or shapes) to extract n_points
+  dummy_upset <- ComplexUpset::upset(
+    data, 
+    colnames(data),  # Use column names (gene sets)
+    set_sizes = ComplexUpset::upset_set_size(),  # Display set sizes
+    sort_sets = FALSE,
+    
+    # Plot the intersection matrix with points (default shapes)
+    matrix = ComplexUpset::intersection_matrix(
+      ggplot2::geom_point(size = 3)  # Simple points without dynamic aesthetics
+    )
+  )
+  
+  # Ensure n_points matches the actual data
+  n_points <- nrow(dummy_upset$data)
+  
+  # Create empty vectors for colors and shapes
+  color_vector <- rep(NA, n_points)  # To store colors
+  shape_vector <- rep(NA, n_points)  # To store shapes
+  
+  # Assign shapes and colors based on group numbers
+  for (j in 1:n_points) {
+    group_value <- as.character(dummy_upset$data$group[j])
+    
+    # Assign shapes
+    if (group_value %in% male_groups) {
+      shape_vector[j] <- 22  # Filled square for Male comparisons
+    } else if (group_value %in% female_groups) {
+      shape_vector[j] <- 21  # Circle for Female comparisons
+    }
+    
+    # Assign colors based on group numbers, only if the point is involved in an intersection
+    if (dummy_upset$data$value[j]) {  # If the point is part of an intersection
+      if (group_value %in% upregulated_groups) {
+        color_vector[j] <- "red"  # Red for Up-regulated
+      } else if (group_value %in% downregulated_groups) {
+        color_vector[j] <- "blue"  # Blue for Down-regulated
+      }
+    } else {
+      color_vector[j] <- NA  # No fill for points not involved in intersections
+    }
+  }
+  
+  # Ensure both vectors are of correct length
+  if (length(shape_vector) != n_points || length(color_vector) != n_points) {
+    stop("Error: shape_vector or color_vector length does not match the number of plotted points.")
+  }
+  
+  # Reintroduce dynamic fill color for filled shapes
+  upset_gene <- ComplexUpset::upset(
+    data, 
+    colnames(data),
+    set_sizes = (
+      ComplexUpset::upset_set_size() +
+      geom_text(aes(label = ..count..), hjust = 1.1, stat = 'count') +
+      expand_limits(y = axis_max)
+    ),
+    
+    # Prevent automatic sorting of sets
+    sort_sets = FALSE,
+    
+    matrix = ComplexUpset::intersection_matrix(
+      ggplot2::geom_point(
+        ggplot2::aes(shape = factor(shape_vector), fill = color_vector),  # Fill shapes with dynamic colors
+        size = 3,
+        stroke = 0.45  # Keeps the outline black
+      )
+    ) + ggplot2::scale_shape_manual(
+      name = "Sex",
+      labels = c("Male", "Female"),  # Legend labels
+      values = c(21, 22) # Circle=21, Filled square=22
+      ) + ggplot2::scale_fill_identity(na.translate = FALSE),  # Use the exact colors in color_vector and remove NA fill
+    
+      base_annotations = list(
+      'Intersection size' = (
+        intersection_size(bar_number_threshold = 1, width = 0.5) +
+        scale_y_continuous(expand = expansion(mult = c(0, 0.05)), limits = c(0, axis_max)) +
+        theme(
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          axis.line = element_line(colour = 'black')
+        )
+      )
+    ),
+  )
+  
+  # create plot title
   upset_gene <- upset_gene + ggtitle(paste0(i,", adj_p_val < 0.05"))
+  
+  # remove legend
+  upset_gene <- upset_gene + theme(legend.position = "None")
+  
   i <- gsub(" ","_",i)
   pdf(paste0(out, "DEGs/upset/",tolower(i),"_upset.pdf"), height = 6, width = 8)
   print(upset_gene)
   dev.off()
 }
 ```
+
