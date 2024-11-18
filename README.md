@@ -1,4 +1,4 @@
-# PLX5622_mice
+# PLX5622 Diet Mice
 - 16 scRNAseq samples of meningeal endothelial cells were sent for sequencing
 - Samples were prepped with 10x Genomics 3' Expression kit
 - Sequenced ~5000 cells at 50k read pairs per cell.
