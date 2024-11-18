@@ -3,4 +3,3 @@ for sample in E3CF1 E3CF2 E3CM1 E3CM2 E3PF1 E3PF2 E3PM1 E3PM2 E4CF1 E4CF2 E4CM1 
 do
 	sbatch 02_count.sh $sample
 done
-

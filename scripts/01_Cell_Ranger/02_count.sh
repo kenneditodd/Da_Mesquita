@@ -4,7 +4,7 @@
 #SBATCH --tasks 32                  # Number of tasks (or CPU cores)
 #SBATCH --output logs/%x.%j.stdout  # File for standard output
 #SBATCH --error logs/%x.%j.stderr   # File for standard error output
-#SBATCH --partition cpu-med         # Specifies the partition (queue)
+#SBATCH --partition cpu-short       # Specifies the partition (queue)
 #SBATCH --time 08:00:00             # Maximum time the job is allowed to run, HH:MM:SS
 #SBATCH --propagate=NONE            # Controls which signals are propagated to child processes
 
@@ -13,7 +13,7 @@ source $HOME/.bash_profile
 source ../../refs/.env
 
 # change directory to your desired output folder
-cd $COUNTS_DIR
+cd $PROJECT_DIR/counts
 
 # get cellranger version
 cellranger -V
