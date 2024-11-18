@@ -4,21 +4,7 @@ Da_Mesquita.Rproj
 .gitignore
 
 # PLX5622_mice
-PLX5622_diet/counts
-PLX5622_diet/results
-PLX5622_diet/rObjects
-PLX5622_diet/scripts/*/logs
-
-# E3_E4_pilot
-E3_E4_pilot/cellbender
-E3_E4_pilot/counts
-E3_E4_pilot/refs/.env
-E3_E4_pilot/refs/cellbender.yml
-E3_E4_pilot/refs/monocle3-leafcutter.img
-E3_E4_pilot/refs/mouse_genes.gtf
-E3_E4_pilot/results
-E3_E4_pilot/rObjects
-E3_E4_pilot/scripts/*/logs
-E3_E4_pilot/scripts/*/old
-E3_E4_pilot/scripts/*/old_backup
-E3_E4_pilot/scripts/*/rsconnect
+counts
+results
+rObjects
+scripts/*/logs
