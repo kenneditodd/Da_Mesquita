@@ -1,2 +1,9 @@
-# Da_Mesquita
-This repository contains two single cell data sets from 10x Genomics. 'E3_E4_pilot' contains E3 or E4 expressing, female or male, 14 month C57BL/6 mice. 'PLX5622_diet' contains E3 or E4 expressing, female or male, PLX5622 or control diet, C57BL/6 mice. For more information on each data set, head to the README in each project folder.
+# PLX5622_mice
+- 16 scRNAseq samples of meningeal endothelial cells were sent for sequencing
+- Samples were prepped with 10x Genomics 3' Expression kit
+- Sequenced ~5000 cells at 50k read pairs per cell.
+- In this experiment we treated E3 and E4, male and female mice (12-month-old), with a control diet or a PLX5622 diet
+  - PLX5622 ablates MHC-II high myeloid cells in the meninges
+- Specifically, we want to view the effects on the transcriptome on BECs and LECs
+- This will then be correlated with the effects on the morphology of the meningeal lymphatics and our existing behavior data
+- There are 8 groups and 2 biological replicates per group (each replicate consisting of cells pooled from two animals)
