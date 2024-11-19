@@ -6,5 +6,8 @@ Da_Mesquita.Rproj
 # PLX5622_mice
 counts
 results
+refs/.env
 rObjects
+scripts/01_Cell_Ranger/06*
+scripts/01_Cell_Ranger/07*
 scripts/*/logs
