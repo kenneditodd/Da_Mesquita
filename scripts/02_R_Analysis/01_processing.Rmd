@@ -39,6 +39,7 @@ library(stringr)     # str_match()
 ## Variables and functions
 ```{r set_variables_and_thresholds}
 # variables
+out <- "../../results/all_clusters/results/all_clusters/"
 sample_order <- c("E3CF1","E3CF2","E3CM1","E3CM2","E3PF1","E3PF2","E3PM1","E3PM2",
                   "E4CF1","E4CF2","E4CM1","E4CM2","E4PF1","E4PF2","E4PM1","E4PM2")
 sample_colors <- c("#9e0909","#f75959","#f0b402","#f5d67a",
@@ -65,14 +66,9 @@ complexity.cutoff <- 0.8
 mt.cutoff <- 20
 hb.cutoff <- 3
 
-# single cell functions
-source("../../../functions/Kennedi_single_cell_functions_v5.R")
-
-# save function
-saveToPDF <- function(...) {
-    d = dev.copy(pdf,...)
-    dev.off(d)
-}
+# functions
+files <- list.files("../../functions", full.names = TRUE)
+sapply(files, source)
 ```
 
 # Load data
