@@ -2,7 +2,7 @@
 title: "PLX5622 Diet Mice scRNAseq"
 subtitle: "All Clusters Pass 1, Downsampled, QC and DE"
 author: "Kennedi Todd"
-date: "06/26/2024"
+date: "11/25/2024"
 output:
   html_document:
     theme: cerulean
@@ -20,7 +20,7 @@ knitr::opts_knit$set(root.dir = ".")
 
 ## Libraries
 ```{r libraries, message=FALSE, warning=FALSE}
-library(ComplexUpset) # 
+library(ComplexUpset) # instersection_size()
 library(dplyr)        # ungroup()
 library(ggrepel)      # geom_text_repel()
 library(ggtree)       # BuildClusterTree()
@@ -28,8 +28,7 @@ library(gridExtra)    # grid.arrange()
 library(gtools)       # smartbind()
 library(parallel)     # detectCores()
 library(plotly)       # plot_ly()
-library(Seurat)       # DimPlot()
-library(ShinyCell)    # createConfig()
+library(Seurat)       # DimPlot()\
 library(tidyr)        # %>%
 library(UpSetR)       # fromList()
 ```
@@ -63,13 +62,14 @@ sex_colors <- c("green","purple")
 diet_order <- c("control","PLX5622")
 diet_color <- c("coral","cyan")
 
-# functions
-source("../../../functions/Kennedi_single_cell_functions.R")
+# single cell functions
+files <- list.files("../../functions", full.names = TRUE)
+invisible(lapply(files, source))
 ```
 
 ## Load data
 ```{r read_pass1_annotated_obj}
-mouse.annotated <- readRDS("../../rObjects/pass1_annotated.rds")
+mouse.annotated <- readRDS("../../rObjects/annotated_seurat_obj.rds")
 ```
 
 # Downsample
@@ -77,19 +77,24 @@ mouse.annotated <- readRDS("../../rObjects/pass1_annotated.rds")
 # check cells per sample
 table(mouse.annotated$sample)
 
-# Downsample the number of cells per identity class
+# downsample the number of cells per identity class
 Idents(mouse.annotated) <- "sample"
 mouse.downsample <- subset(x = mouse.annotated, downsample = 2000)
+
+# check
 table(mouse.downsample$sample)
 
-# save
-#saveRDS(mouse.downsample, "../../rObjects/pass1_annotated_downsampled.rds")
+# cleanup
 remove(mouse.annotated)
+```
+
+```{r save_downsampled_obj, eval=FALSE, echo=FALSE}
+saveRDS(mouse.downsample, "../../rObjects/annotated_downsampled_seurat_obj.rds")
 ```
 
 # QC
 ## 2D UMAP
-```{r 2D_annotated_umap}
+```{r annotated_umap}
 # set colors
 cluster_colors <- c("#B5B9BA", # Pericytes and SMCs
                     "#3385BB", # BECs
@@ -105,22 +110,34 @@ cluster_colors <- c("#B5B9BA", # Pericytes and SMCs
                     "#9D7BBA", # Fibroblasts
                     "#977899") # Schwann cells
 
-
 # umap
 Idents(mouse.downsample) <- "annotated_clusters"
-umap <- DimPlot(object = mouse.downsample, 
-        reduction = "umap",
-        repel = TRUE,
-        group.by = "annotated_clusters",
-        cols = cluster_colors)
-umap
+umap1 <- DimPlot(object = mouse.downsample,
+                 reduction = "umap",
+                 repel = TRUE,
+                 group.by = "annotated_clusters",
+                 cols = cluster_colors)
+umap1
+
+umap2 <- DimPlot(object = mouse.downsample,
+                 reduction = "umap",
+                 repel = TRUE,
+                 dims = c(2,3),
+                 group.by = "annotated_clusters",
+                 cols = cluster_colors)
+umap2
 ```
 
-```{r}
-pdf(paste0(out, "UMAP/annotated_clusters_dim1&2.pdf"))
-umap
+```{r save_annotated_umap}
+pdf(paste0(out, "UMAP/annotated_clusters_dim1&2.pdf"), width = 7, height = 4)
+umap1
 dev.off()
-remove(umap)
+
+pdf(paste0(out, "UMAP/annotated_clusters_dim2&3.pdf"), width = 7, height = 4)
+umap2
+dev.off()
+
+remove(umap1,umap2)
 ```
 
 ## Cluster markers
@@ -140,10 +157,10 @@ v
 ```
 
 ```{r save_ann_markers, echo=FALSE}
-path <- paste0(out, "markers/")
-pdf(paste0(path, "sandro_markers_violin_annotated.pdf"), width = 10, height = 8)
+pdf(paste0(out, "markers/sandro_markers_violin_annotated.pdf"), width = 10, height = 8)
 v
 dev.off()
+remove(v)
 ```
 
 ## Split UMAP
@@ -1031,7 +1048,6 @@ for (i in 1:length(files)) {
   } # end j for loop
 } # end i for loop
 ```
-
 
 ## Upset plots
 ### Function

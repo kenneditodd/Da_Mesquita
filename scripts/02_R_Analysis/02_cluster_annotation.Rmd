@@ -1,7 +1,8 @@
 ---
 title: "PLX5622 Diet Mice scRNAseq"
+subtitle: "Cluster Annotation"
 author: "Kennedi Todd"
-date: "06/26/2024"
+date: "11/20/2024"
 output:
   pdf_document:
     toc: yes
@@ -9,7 +10,6 @@ output:
     theme: cerulean
     toc: yes
     toc_float: yes
-subtitle: All Clusters Pass 1 Annotation
 editor_options:
   chunk_output_type: inline
 ---
@@ -39,7 +39,7 @@ library(tidyr)        # %>%
 ## Variables and functions
 ```{r set_variables_and_thresholds}
 # variables
-out <- "../../results/all_clusters_pass1/"
+out <- "../../results/all_clusters/"
 sample_order <- c("E3CF1","E3CF2","E3CM1","E3CM2","E3PF1","E3PF2","E3PM1","E3PM2",
                   "E4CF1","E4CF2","E4CM1","E4CM2","E4PF1","E4PF2","E4PM1","E4PM2")
 sample_colors <- c("#9e0909","#f75959","#f0b402","#f5d67a",
@@ -58,18 +58,12 @@ sex_order <- c("Male","Female")
 sex_colors <- c("green","purple")
 diet_order <- c("control","PLX5622")
 diet_color <- c("coral","cyan")
-
-# save function
-saveToPDF <- function(...) {
-    d = dev.copy(pdf,...)
-    dev.off(d)
-}
 ```
 
 ## Read data
 ```{r read_object}
 # read obj
-mouse.unannotated <- readRDS("../../rObjects/pass1_unannotated.rds")
+mouse.unannotated <- readRDS("../../rObjects/unannotated_seurat_obj.rds")
 
 # set params
 Idents(mouse.unannotated) <- "seurat_clusters"
@@ -84,7 +78,7 @@ mouse.unannotated
 
 # Unannotated QC
 ## UMAP
-```{r pass1_unannotated_umap}
+```{r unannotated_umap}
 cluster_colors <- c("red","blue","cyan","black","chocolate4","gray","steelblue",
                     "orange","green","magenta","yellow","purple","forestgreen",
                     "tan","salmon","plum1")
@@ -106,11 +100,16 @@ u2 <- DimPlot(object = mouse.unannotated,
 u2
 ```
 
-```{r save_pass1_unannotated_umap, echo=FALSE, eval=FALSE}
+```{r save_unannotated_umap, echo=FALSE, eval=FALSE}
+pdf(paste0(out, "UMAP/unannotated_clusters_dim1&2.pdf"))
 u1
-path <- paste0("../../results/all_clusters_pass1/UMAP/unannotated_clusters")
-saveToPDF(paste0(path, ".pdf"), width = 6, height = 4)
 dev.off()
+
+pdf(paste0(out, "UMAP/unannotated_clusters_dim2&3.pdf"))
+u2
+dev.off()
+
+remove(u1,u2)
 ```
 
 ## Feature plots
@@ -159,7 +158,7 @@ FeaturePlot(mouse.unannotated,
 ```
 
 ## Violins
-```{r}
+```{r qc_violins}
 VlnPlot(mouse.unannotated,
         features = "nCount_RNA",
         cols = cluster_colors,
@@ -571,12 +570,12 @@ markers <- SeuratWrappers::RunPrestoAll(
 )
 
 # save
-saveRDS(markers, "../../rObjects/pass1_unannotated_cluster_markers.rds")
+saveRDS(markers, "../../rObjects/unannotated_cluster_markers.rds")
 ```
 
 ```{r read_all_markers_unannotated}
 # read object
-all.markers <- readRDS("../../rObjects/pass1_unannotated_cluster_markers.rds")
+all.markers <- readRDS("../../rObjects/unannotated_cluster_markers.rds")
 
 # more stringent filtering
 all.markers <- all.markers[all.markers$p_val_adj < 0.01,]
@@ -604,7 +603,7 @@ cluster15 <- all.markers[all.markers$cluster == 15,]
 
 # save
 write.table(all.markers,
-            "../../results/all_clusters_pass1/markers/unannotated_cluster_markers_pvaladj_0.01.tsv", 
+            paste0(out, "markers/unannotated_auto_find_markers_adjpval_0.01.tsv"), 
             sep = "\t", quote = FALSE, row.names = FALSE)
 ```
 
@@ -872,10 +871,10 @@ dev.off()
 remove(umap1,umap2)
 ```
 
-```{r save_pass1_annotated_object, echo=FALSE, eval=FALSE}
+```{r save_annotated_object, echo=FALSE, eval=FALSE}
 # save object
-saveRDS(mouse.annotated, "../../rObjects/pass1_annotated.rds")
-#mouse.annotated <- readRDS("../../rObjects/pass1_annotated.rds")
+saveRDS(mouse.annotated, "../../rObjects/annotated_seurat_obj.rds")
+#mouse.annotated <- readRDS("../../rObjects/annotated_seurat_obj.rds")
 ```
 
 ## Automatically detect markers
@@ -920,19 +919,6 @@ v1 <- VlnPlot(mouse.annotated,
               stack = TRUE,
               cols = cluster_colors)
 v1
-
-goi <- c("Pdgfrb","Acta2","Vwf","Cldn5","Pecam1","Flt4","Prox1","Lyve1","Ptprc",
-         "Cd19","Ms4a1","Ighd","Igha","Sdc1","Cd3e","Trbc2","Il7r","Nkg7","Klrb1b","Klrb1c",
-         "Gata3","Rora","Itgax","H2-Eb1","Ccr2","Ly6c2","Lyz2","Ly6g","Itgam",
-         "Mrc1","Csf1r","Cd38","Mki67","Mcpt4","Ms4a2","Col1a2","Plp1")
-v2 <- VlnPlot(mouse.annotated,
-              group.by = "annotated_clusters",
-              split.by = "annotated_clusters",
-              stack = TRUE,
-              flip = TRUE,
-              cols = cluster_colors,
-              features = goi)
-v2
 ```
 
 ```{r save_annotated_cluster_markers, eval=FALSE, echo=FALSE}
@@ -940,10 +926,7 @@ pdf(paste0(out, "markers/auto_markers_violin_annotated.pdf"), width = 8, height 
 v1
 dev.off()
 
-pdf(paste0(out, "markers/sandro_markers_violin_annotated.pdf"), width = 12, height = 10)
-v2
-dev.off()
-remove(v1,v2)
+remove(v1)
 ```
 
 ## Pseudobulk PCA
