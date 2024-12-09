@@ -28,7 +28,7 @@ library(gridExtra)    # grid.arrange()
 library(gtools)       # smartbind()
 library(parallel)     # detectCores()
 library(plotly)       # plot_ly()
-library(Seurat)       # DimPlot()\
+library(Seurat)       # DimPlot()
 library(tidyr)        # %>%
 library(UpSetR)       # fromList()
 ```
