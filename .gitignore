@@ -1,15 +1,19 @@
 # environment files
+.git
+.gitignore
+.Rhistory
 .Rproj.user
 Da_Mesquita.Rproj
-.gitignore
 
 # PLX5622_mice
 counts
 matrices
-results
 refs/.env
+results
 rObjects
 scripts/01_Cell_Ranger/06*
 scripts/01_Cell_Ranger/07*
+scripts/01_Cell_Ranger/08*
 scripts/02_R_Analysis/00*
-scripts/*/logs
+scripts/02_R_Analysis/logs
+scripts/02_R_Analysis/old

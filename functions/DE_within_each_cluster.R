@@ -16,6 +16,7 @@ DE_within_each_cluster <- function(obj, outDir, clusterCol = "annotated_clusters
   
   # initialize variables
   cell_types <- levels(obj$clusterCol)
+  if(is.null(cell_types)) {cell_types <- unique(obj$clusterCol)}
   master.df <- data.frame()
   
   # loop through clusters

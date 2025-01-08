@@ -1,12 +1,10 @@
 #!/bin/sh
-#SBATCH --job-name n10x_count       # Name of the job
-#SBATCH --mem 50G                   # Amount of memory allocated for the job
-#SBATCH --tasks 32                  # Number of tasks (or CPU cores)
-#SBATCH --output logs/%x.%j.stdout  # File for standard output
-#SBATCH --error logs/%x.%j.stderr   # File for standard error output
-#SBATCH --partition cpu-short       # Specifies the partition (queue)
-#SBATCH --time 08:00:00             # Maximum time the job is allowed to run, HH:MM:SS
-#SBATCH --propagate=NONE            # Controls which signals are propagated to child processes
+#SBATCH --job-name=n10x_count       # Name of the job
+#SBATCH --mem=50G                   # Amount of memory allocated for the job
+#SBATCH --tasks=32                  # Number of tasks (or CPU cores)
+#SBATCH --output=logs/%x.%j.stdout  # File for standard output
+#SBATCH --error=logs/%x.%j.stderr   # File for standard error output
+#SBATCH --time=08:00:00             # Maximum time the job is allowed to run, HH:MM:SS
 
 # source settings and environment variables
 source $HOME/.bash_profile
@@ -18,7 +16,7 @@ cd $PROJECT_DIR/counts
 # get cellranger version
 cellranger -V
 
-# print sample passed from 03_sample_loop.sh script
+# print sample variable passed from 03_sample_loop.sh script
 SAMPLE=$1
 echo "sample: $SAMPLE"
 

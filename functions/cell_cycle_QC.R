@@ -1,14 +1,15 @@
 #' cell_cycle_QC
 #'
-#' @param obj A Seurat object.
-#' @param species A character with value mouse or human. Necessary for cell cycle phase marker list.
-#' @param outDir Path to output directory where QC plots will be saved.
+#' @param obj A v5 Seurat object.
+#' @param markersPath Path to table with cell markers.
+#' @param species A character with value "mouse" or "human". Necessary for subsetting cell cycle phase marker table.
+#' @param outDir Path to output directory where QC plots will be saved. The default directory is the current one.
 #' @param verbose Display messages
 #' @return A character vector containing cell phases.
 #' @export
 #' @examples
 #' #' mySeuratObject[["phase"]] <- cell_cycle_QC(mySeuratObject, "mouse")
-cell_cycle_QC <- function(obj, species, markersPath, sampleCol = "sample", outDir = NULL, verbose = TRUE) {
+cell_cycle_QC <- function(obj, markersPath, species, sampleCol = "sample", outDir = NULL, verbose = TRUE) {
   
   # required packages
   require(dplyr)
@@ -32,11 +33,11 @@ cell_cycle_QC <- function(obj, species, markersPath, sampleCol = "sample", outDi
   if(verbose){print("Normalizing data")}
   obj <- NormalizeData(obj)
   
-  # load cell cycle markers
+  # load cell cycle phase markers
   phase.markers <- read.delim(markersPath, header = TRUE, sep = "\t")
-  phase.markers <- subset(phase.markers, species == species)
+  phase.markers <- phase.markers[phase.markers$species == species,]
   
-  # save cycle marker list
+  # save the file
   write.table(phase.markers, 
               paste0(output, species, "_cell_cycle_phase_markers.tsv"),
               quote = FALSE, sep = "\t", row.names = FALSE)

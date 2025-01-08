@@ -11,7 +11,7 @@ project_dir <- Sys.getenv("PROJECT_DIR")
 # read list of samples
 samples <- readLines(paste0(project_dir, "/refs/sample_names.txt"))
 
-###################### Copy PIPseeker MEX files over ###########################
+###################### Copy 10x Genomics MEX files over ########################
 
 # loop through samples and copy matrix files to new folder
 for (i in samples) {
@@ -39,24 +39,3 @@ for (i in samples) {
               paste0(output_base_dir, "/", i, "_matrix.mtx.gz"))
   
 }
-
-###################### Reformat Cellbender to MEX files ########################
-
-# loop through samples, read cellbender output, reformat, and copy to new folder
-
-#for (i in samples) {
-#  # print the sample you're on
-#  print(i)
-  
-  # set paths and dir names
-#  input_path <- paste0(project_dir, "/counts/",i, "/", i, "_cellbender_filtered.h5")
-#  output_dir <- 
-#    paste0(project_dir, "/matrices/pipseeker_filtered_matrix_sensitivity5_with_cellbender")
-  
-  # read h5 file in and reformat
-#  mat <- Read_CellBender_h5_Mat(input_path)
-#  write10xCounts(path = paste0(output_dir, "/", i),
-#                 x = mat)
-#}
-
-
