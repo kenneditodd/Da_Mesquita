@@ -59,12 +59,11 @@ cluster_colors <- c("#B5B9BA", # Pericytes and SMCs
 
 # umap
 Idents(mouse.downsample) <- "annotated_clusters"
-umap <- DimPlot(object = mouse.downsample,
-                reduction = "umap",
-                repel = TRUE,
-                group.by = "annotated_clusters",
-                cols = cluster_colors)
-umap
+DimPlot(object = mouse.downsample,
+        reduction = "umap",
+        repel = TRUE,
+        group.by = "annotated_clusters",
+        cols = cluster_colors)
 ```
 
 # Compare DEGs
@@ -1263,12 +1262,15 @@ for (i in clusters) {
 # NicheNet
 - (Perform NicheNet analysis starting from a Seurat object: step-by-step analysis)[https://github.com/saeyslab/nichenetr/blob/master/vignettes/seurat_steps.md] \
 - NicheNet can predict.. \
-  - Which ligands from cell populations (“sender/niche”) are most likely to affect target gene expression in an interacting cell population (“receiver/target”) \
+  - Which ligands from sender cell populations are most likely to affect target gene expression in receiver/target cell populations \
   - Which specific target genes are affected by which of these predicted ligands \
   
 ## Read in network
 - Read in the ligand-target prior model, ligand-receptor network, and weighted integrated networks \
 ```{r read_network}
+# set timeout
+options(timeout = 300)
+
 # ligand-receptor network
 nn_lr_network <- 
   readRDS(url("https://zenodo.org/record/7074291/files/lr_network_mouse_21122021.rds"))
@@ -1278,54 +1280,80 @@ nn_lr_network <- lr_network %>% distinct(from, to)
 nn_ligand_target_matrix <- 
   readRDS(url("https://zenodo.org/record/7074291/files/ligand_target_matrix_nsga2r_final_mouse.rds"))
 
-# weighter integrated networks
+# weighted integrated networks
 nn_weighted_networks <- 
   readRDS(url("https://zenodo.org/record/7074291/files/weighted_networks_nsga2r_final_mouse.rds"))
 ```
 
-## Sender-agnostic approach
-- First, we will do the sender-agnostic approach. \
-- All ligands in LR (ligand-receptor) database whose cognate receptors are expressed in the receiver. \
-  - If a given cell population expresses receptor genes, all associated ligands in the LR database will be used. \
-- Sender cells = cells that express ligands \
-- Reciever cells = cells that express the receptors \
-```{r sender_agnostic_approach}
+## User input
+- Interested in the following combinations
+  - 1) E4CM vs E3CM
+    - Receiver: LECs
+    - Sender: Senders Macrophages; B cells; T & NK cells; BECs
+  - 2) Males DEGs in PLX E4 vs Control E4
+    - Receiver: LECs
+    - Sender: B cells; T & NK cells; BECs
+  - 3) Females DEGs in Control E4 vs Control E3
+    - Receiver: LECs
+    - Senders: Macrophages; B cells; T & NK cells; BECs
+  - 4) Females DEGs in PLX E4 vs Control E4
+    - Receiver: LECs
+    - Senders: B cells; T & NK cells; BECs
+- Sender cells = cells that express ligands
+- Reciever cells = cells that express the receptors
+```{r nichenet_user_input}
 # user defined variables
-receiver <- "BECs"
+comparison <- "E4CM_vs_E3CM"
+myReceiver <- "LECs"
+mySender <- "Macrophages"
+```
 
-# determine genes expressed in target cell population
+## Sender-agnostic potential ligands
+First, we will do the sender-agnostic approach. If a receptor is expressed in a reciever cell population, all associated ligands will be used. This approach utilizes a ligand-receptor (LR) database.
+```{r sender_agnostic_approach}
+# determine all genes expressed in target cell population
 cell_types <- levels(mouse.downsample$annotated_clusters)
-expressed_genes_receiver <- get_expressed_genes(receiver, mouse.downsample)
+all_genes_receiver <- get_expressed_genes(myReceiver, mouse.downsample)
+print(paste("Reciever cell population =", myReceiver))
+print(paste(length(all_genes_receiver), "genes expressed in the reciever cell population."))
 
 # define expressed receptors in the target cell population
-all_receptors <- unique(lr_network$to)  
-expressed_receptors <- intersect(all_receptors, expressed_genes_receiver)
+all_receptors <- unique(lr_network$to)
+print(paste(length(all_receptors), "receptors in the ligand-receptor database."))
+all_receptors_receiver <- intersect(all_receptors, all_genes_receiver)
+print(paste(length(all_receptors_receiver), "receptors expressed in reciever cell population."))
 
-# define potential ligands with cognate receptors
-potential_ligands <- lr_network %>% 
-  filter(to %in% expressed_receptors) %>% 
+# define potential ligands with expressed receptors
+potential_ligands_sender_agnostic <- lr_network %>% 
+  filter(to %in% all_receptors_receiver) %>% 
   pull(from) %>% 
   unique()
+print(paste("There are", length(potential_ligands_sender_agnostic), "potential ligands."))
 ```
 
 ## Sender-focused approach
-- Second, we will do the sender-focused approach. \
-- Ligands expressed in senders whose cognate receptors are expressed in the reciever. \
-  - In all other cell populations (not the reciever cell population), if a ligand gene is expressed then all associated receptors in the LR database will be used. \
+Second, we will do the sender-focused approach. Ligands expressed in senders whose matching receptors are expressed in the reciever.
 ```{r sender_focused_approach}
-sender_celltypes <- cell_types[!cell_types %in% receiver]
+# get all sender cell populations
+sender_celltypes <- cell_types[!cell_types %in% myReceiver]
 
-# Use lapply to get the expressed genes of every sender cell type separately
-list_expressed_genes_sender <- 
+# get all the expressed genes of every sender cell type separately
+list_all_genes_sender <- 
   sender_celltypes %>% 
   unique() %>% 
   lapply(get_expressed_genes, mouse.downsample)
-expressed_genes_sender <- 
-  list_expressed_genes_sender %>% 
+all_ligands_sender <- 
+  list_all_genes_sender %>% 
   unlist() %>% 
   unique()
+print(paste(length(all_ligands_sender), "expressed ligands from sender cell types."))
 
-potential_ligands_focused <- intersect(potential_ligands, expressed_genes_sender) 
+# get intersection to find ligands to focus on
+potential_ligands_focused <- intersect(potential_ligands_sender_agnostic, 
+                                       all_expressed_ligands_sender)
+
+# view how many
+length(potential_ligands_focused)
 ```
 
 ## Define gene set of interest
@@ -1352,7 +1380,7 @@ degs <- degs %>% .[. %in% rownames(ligand_target_matrix)]
 
 ## Define background genes
 ```{r background_genes}
-background_expressed_genes <- expressed_genes_receiver %>% .[. %in% rownames(ligand_target_matrix)]
+background_expressed_genes <- all_expressed_genes_receiver %>% .[. %in% rownames(ligand_target_matrix)]
 
 length(background_expressed_genes)
 length(degs)
@@ -1367,7 +1395,7 @@ length(degs)
 ligand_activities <- predict_ligand_activities(geneset = degs,
                                                background_expressed_genes = background_expressed_genes,
                                                ligand_target_matrix = ligand_target_matrix,
-                                               potential_ligands = potential_ligands)
+                                               potential_ligands = potential_ligands_sender_agnostic)
 
 ligand_activities <- 
   ligand_activities %>% 
@@ -1443,7 +1471,7 @@ make_heatmap_ggplot(vis_ligand_target, "Prioritized ligands", "Predicted target 
 ### Receptors of top ranked ligands
 ```{r}
 ligand_receptor_links_df <- get_weighted_ligand_receptor_links(
-  best_upstream_ligands, expressed_receptors,
+  best_upstream_ligands, all_expressed_receptors_receiver,
   lr_network, weighted_networks$lr_sig) 
 
 vis_ligand_receptor_network <- prepare_ligand_receptor_visualization(
