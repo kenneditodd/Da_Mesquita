@@ -14,6 +14,7 @@ rObjects
 scripts/01_Cell_Ranger/06*
 scripts/01_Cell_Ranger/07*
 scripts/01_Cell_Ranger/08*
+scripts/01_Cell_Ranger/logs
 scripts/02_R_Analysis/00*
 scripts/02_R_Analysis/logs
 scripts/02_R_Analysis/old
