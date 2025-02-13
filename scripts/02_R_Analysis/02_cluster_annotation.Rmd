@@ -2,7 +2,7 @@
 title: "PLX5622 Diet Mice scRNAseq"
 subtitle: "Cluster Annotation"
 author: "Kennedi Todd"
-date: "11/20/2024"
+date: "02/12/2025"
 output:
   pdf_document:
     toc: yes
@@ -15,9 +15,6 @@ editor_options:
 ---
 
 # Setup
-## Experiment notes
-16 scRNAseq samples of meningeal endothelial cells were sent for sequencing. In this experiment we treated E3 and E4, male and female mice (12-month-old), with a control diet or a PLX5622 diet (to ablate MHC-II high myeloid cells in the meninges), and we intend to see the effects on the transcriptome of BECs and LECs. This will then be correlated with the effects on the morphology of the meningeal lymphatics and with our very interesting behavior data. There are 8 groups and 2 biological replicates per groups (each replicate consisting of cells pooled from two animals). We will be submitting ~5000 cells for sequencing at 50k read pairs per cell.
-
 ## Working directory
 ```{r working_directory}
 knitr::opts_knit$set(root.dir = ".")
@@ -26,7 +23,6 @@ knitr::opts_knit$set(root.dir = ".")
 ## Libraries
 ```{r libraries, message=FALSE, warning=FALSE}
 library(dplyr)        # ungroup()
-library(ggtree)       # BuildClusterTree()
 library(gridExtra)    # grid.arrange()
 library(gtools)       # smartbind()
 library(parallel)     # detectCores()
@@ -39,23 +35,29 @@ library(tidyr)        # %>%
 ## Variables and functions
 ```{r set_variables_and_thresholds}
 # variables
-out <- "../../results/all_clusters/"
+out <- "../../results/"
+
 sample_order <- c("E3CF1","E3CF2","E3CM1","E3CM2","E3PF1","E3PF2","E3PM1","E3PM2",
                   "E4CF1","E4CF2","E4CM1","E4CM2","E4PF1","E4PF2","E4PM1","E4PM2")
 sample_colors <- c("#9e0909","#f75959","#f0b402","#f5d67a",
                    "#fbff0a","#fafaa7","#1d8c0e","#63e851",
                    "#0271f0","#9cc3f0","#6c39f7","#c589fa",
                    "#ed2af7","#f5c1f7","#755410","#b5aa82")
+
 group_order <- c("E3CM","E3PM","E4CM","E4PM",
                  "E3CF","E3PF","E4CF","E4PF")
 group_colors <- c("#B89B74","#725E47","#B15928","#F7590B",
                   "#A6CEE3","#34B1E8","#ED8F47","#F4CC25")
+
 group2_order <- c("E3C","E3P","E4C","E4P")
 group2_colors <- c("#f75959","#fbff0a","#63e851","#0271f0")
+
 isoform_order <- c("E4","E3")
 isoform_colors <- c("darkgray","cornflowerblue")
+
 sex_order <- c("Male","Female")
 sex_colors <- c("green","purple")
+
 diet_order <- c("control","PLX5622")
 diet_color <- c("coral","cyan")
 ```
@@ -294,26 +296,6 @@ mouse.unannotated@meta.data %>%
   theme(axis.text.x = element_text(angle = 90))
 ```
 
-## Cluster tree
-- Cluster trees are helpful in deciding what clusters to merge. \
-```{r cluster_tree_unannotated, message=FALSE, warning=FALSE}
-mouse.unannotated <- BuildClusterTree(object = mouse.unannotated,
-                                     dims = 1:15,
-                                     reorder = FALSE,
-                                     reorder.numeric = FALSE)
-tree <- mouse.unannotated@tools$BuildClusterTree
-tree$tip.label <- paste0(tree$tip.label)
-
-ggtree::ggtree(tree, aes(x, y)) +
-  scale_y_reverse() +
-  ggtree::geom_tree() +
-  ggtree::theme_tree() +
-  ggtree::geom_tiplab(offset = 1) +
-  ggtree::geom_tippoint(color = cluster_colors[1:length(tree$tip.label)], shape = 16, size = 5) +
-  coord_cartesian(clip = 'off') +
-  theme(plot.margin = unit(c(0,2.5,0,0), 'cm'))
-```
-
 # Potential Markers
 ## B-cells / Plasma cells
 - Cd19: expressed in B-cells and follicular dendritic cells \
@@ -440,7 +422,6 @@ VlnPlot(mouse.unannotated,
 ```
 
 ## Monocytes/DCs
-- Cd11c/Itgax: Monocytes and DCs
 ```{r monocytes_DCs}
 VlnPlot(mouse.unannotated,
         features = "Itgax", # Cd11c
@@ -560,7 +541,7 @@ v5
 ```
 
 ## Find markers
-```{r, eval=FALSE}
+```{r find_markers_unannotated}
 # Find markers for each cluster
 markers <- SeuratWrappers::RunPrestoAll(
   object = mouse.unannotated,
@@ -569,13 +550,8 @@ markers <- SeuratWrappers::RunPrestoAll(
   only.pos = TRUE
 )
 
-# save
-saveRDS(markers, "../../rObjects/unannotated_cluster_markers.rds")
-```
-
-```{r read_all_markers_unannotated}
-# read object
-all.markers <- readRDS("../../rObjects/unannotated_cluster_markers.rds")
+# copy
+all.markers <- markers
 
 # more stringent filtering
 all.markers <- all.markers[all.markers$p_val_adj < 0.01,]
@@ -787,22 +763,22 @@ VlnPlot(mouse.unannotated,
 ```{r assign_identities, eval=FALSE, echo=FALSE}
 # rename all identities
 mouse.annotated <- RenameIdents(object = mouse.unannotated,
-                                "0" = "BECs",                        # Flt1, Ptprb, Ly6c1
-                                "1" = "Macrophages",                 # Csf1r, Mrc1, C1qa, C1qb, C1qc
-                                "2" = "B cells",                     # Fcrla, Ms4a1, Cd79a
-                                "3" = "T and NK cells",              # Ms4a4b, Cd3g, Cd3d, Cd3e
-                                "4" = "ILCs",                        # Gata3, Il7r
-                                "5" = "Fibroblasts",                 # Col1a1, Col1a2
-                                "6" = "Macrophages",                 # C1qa, C1qb
-                                "7" = "BECs",                        # Vwf, Flt1
-                                "8" = "Dendritic cells",             # Ccr2, Fgr
-                                "9" = "Neutrophils",                 # Retnlg, S100a9, S100a8, Hp
-                                "10" = "Pericytes and SMCs",         # Notch3, Rgs5, Myh11
-                                "11" = "BECs",                       # Cldn5, Flt1
-                                "12" = "Myeloid precursors",         # Stmn1, Mki67
-                                "13" = "Mast cells",                 # Kit, Fcer1a
-                                "14" = "LECs",                       # Prox1, Flt4
-                                "15" = "Schwann cells")              # Plp1, Cdh19
+                                "0" = "BECs",                # Flt1, Ptprb, Ly6c1
+                                "1" = "Macrophages",         # Csf1r, Mrc1, C1qa, C1qb, C1qc
+                                "2" = "B cells",             # Fcrla, Ms4a1, Cd79a
+                                "3" = "T and NK cells",      # Ms4a4b, Cd3g, Cd3d, Cd3e
+                                "4" = "ILCs",                # Gata3, Il7r
+                                "5" = "Fibroblasts",         # Col1a1, Col1a2
+                                "6" = "Macrophages",         # C1qa, C1qb
+                                "7" = "BECs",                # Vwf, Flt1
+                                "8" = "Dendritic cells",     # Ccr2, Fgr
+                                "9" = "Neutrophils",         # Retnlg, S100a9, S100a8, Hp
+                                "10" = "Pericytes and SMCs", # Notch3, Rgs5, Myh11
+                                "11" = "BECs",               # Cldn5, Flt1
+                                "12" = "Myeloid precursors", # Stmn1, Mki67
+                                "13" = "Mast cells",         # Kit, Fcer1a
+                                "14" = "LECs",               # Prox1, Flt4
+                                "15" = "Schwann cells")      # Plp1, Cdh19
 mouse.annotated$annotated_clusters <- Idents(mouse.annotated)
 
 mouse.annotated$annotated_clusters <- factor(mouse.annotated$annotated_clusters,
@@ -857,26 +833,58 @@ umap2 <- DimPlot(object = mouse.annotated,
 umap2
 ```
 
-```{r save_annotated_umap, echo=FALSE, eval=FALSE}
-path <- paste0(out, "UMAP/annotated_clusters_dim1&2.pdf")
-pdf(path, width = 7, height = 4)
+```{r save_annotated_object, echo=FALSE, eval=FALSE}
+# save object
+saveRDS(mouse.annotated, "../../rObjects/annotated_seurat_obj.rds")
+```
+
+# Downsample
+```{r downsample}
+# check cells per sample
+table(mouse.annotated$sample)
+
+# downsample the number of cells per identity class
+Idents(mouse.annotated) <- "sample"
+mouse.annotated <- subset(x = mouse.annotated, downsample = 2000)
+
+# check
+table(mouse.annotated$sample)
+```
+
+```{r annotated_umap_downsampled, eval=FALSE, echo=FALSE}
+# umap
+umap1 <- DimPlot(object = mouse.annotated, 
+        reduction = "umap",
+        repel = TRUE,
+        group.by = "annotated_clusters",
+        cols = cluster_colors)
+umap1
+umap2 <- DimPlot(object = mouse.annotated, 
+        reduction = "umap",
+        repel = TRUE,
+        dims = c(2,3),
+        group.by = "annotated_clusters",
+        cols = cluster_colors)
+umap2
+```
+
+```{r save_annotated_downsampled_umap}
+pdf(paste0(out, "UMAP/annotated_clusters_dim1&2.pdf"), width = 6, height = 4)
 umap1
 dev.off()
 
-path <- paste0(out, "UMAP/annotated_clusters_dim2&3.pdf")
-pdf(path, width = 7, height = 4)
+pdf(paste0(out, "UMAP/annotated_clusters_dim2&3.pdf"), width = 6, height = 4)
 umap2
 dev.off()
 
 remove(umap1,umap2)
 ```
 
-```{r save_annotated_object, echo=FALSE, eval=FALSE}
-# save object
-saveRDS(mouse.annotated, "../../rObjects/annotated_seurat_obj.rds")
-#mouse.annotated <- readRDS("../../rObjects/annotated_seurat_obj.rds")
+```{r save_downsampled_obj, eval=FALSE, echo=FALSE}
+saveRDS(mouse.annotated, "../../rObjects/annotated_downsampled_seurat_obj.rds")
 ```
 
+# Markers
 ## Automatically detect markers
 ```{r run_presto_annotated}
 # auto find markers

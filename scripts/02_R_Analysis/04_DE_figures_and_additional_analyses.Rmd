@@ -28,6 +28,7 @@ library(gtools)       # smartbind()
 library(nichenetr)    # get_expressed_genes()
 library(parallel)     # detectCores()
 library(plotly)       # plot_ly()
+library(purrr)        # set_names()
 library(Seurat)       # DimPlot()
 library(tibble)       # column_to_rownames()
 library(tidyr)        # %>%
@@ -1260,227 +1261,392 @@ for (i in clusters) {
 ```
 
 # NicheNet
-- (Perform NicheNet analysis starting from a Seurat object: step-by-step analysis)[https://github.com/saeyslab/nichenetr/blob/master/vignettes/seurat_steps.md] \
-- NicheNet can predict.. \
-  - Which ligands from sender cell populations are most likely to affect target gene expression in receiver/target cell populations \
-  - Which specific target genes are affected by which of these predicted ligands \
-  
 ## Read in network
-- Read in the ligand-target prior model, ligand-receptor network, and weighted integrated networks \
+Read in the ligand-receptor network, ligand-target prior model, and weighted integrated networks.
 ```{r read_network}
-# set timeout
-options(timeout = 300)
-
 # ligand-receptor network
 nn_lr_network <- 
   readRDS(url("https://zenodo.org/record/7074291/files/lr_network_mouse_21122021.rds"))
-nn_lr_network <- lr_network %>% distinct(from, to)
 
 # ligand-target prior model
+options(timeout = 400)
 nn_ligand_target_matrix <- 
   readRDS(url("https://zenodo.org/record/7074291/files/ligand_target_matrix_nsga2r_final_mouse.rds"))
 
 # weighted integrated networks
+options(timeout = 400)
 nn_weighted_networks <- 
   readRDS(url("https://zenodo.org/record/7074291/files/weighted_networks_nsga2r_final_mouse.rds"))
 ```
 
 ## User input
-- Interested in the following combinations
-  - 1) E4CM vs E3CM
-    - Receiver: LECs
-    - Sender: Senders Macrophages; B cells; T & NK cells; BECs
-  - 2) Males DEGs in PLX E4 vs Control E4
-    - Receiver: LECs
-    - Sender: B cells; T & NK cells; BECs
-  - 3) Females DEGs in Control E4 vs Control E3
-    - Receiver: LECs
-    - Senders: Macrophages; B cells; T & NK cells; BECs
-  - 4) Females DEGs in PLX E4 vs Control E4
-    - Receiver: LECs
-    - Senders: B cells; T & NK cells; BECs
-- Sender cells = cells that express ligands
-- Reciever cells = cells that express the receptors
-```{r nichenet_user_input}
+- Sender cells = cells that express ligands \
+- Receiver cells = cells that express the receptors \
+```{r nn_user_input}
 # user defined variables
-comparison <- "E4CM_vs_E3CM"
+groups <- c("E4CF","E3CF")
 myReceiver <- "LECs"
-mySender <- "Macrophages"
+mySenders <- c("Macrophages","BECs","B cells","T and NK cells")
+recieverOut <- "receiver_LECs"
+senderOut <- "/sender_macro_becs_b_t_nk_cells"
+
+# initialize log file
+log_path <- paste0(out, "nichenet/", groups[1], "_vs_", groups[2], "/", 
+                   recieverOut, senderOut, "/log.txt")
+cat("NicheNet Analysis\n", file = log_path, sep = "\n", append = FALSE)
+
+# write user input to log
+msg <- c("Comparison of interest:", paste0("\t", groups[1], " vs. ", groups[2]),
+         "Reciever:", paste0("\t", myReceiver),
+         "Senders:", paste0("\t", mySenders))
+cat(msg, file = log_path, append = TRUE, sep = "\n")
+
+# filter seurat obj based on cell types of interest
+mouse.nn <- subset(mouse.downsample, annotated_clusters %in% c(mySenders, myReceiver))
+mouse.nn <- subset(mouse.nn, group %in% groups[1])
+
+# get distribution of cell types and groups
+df <- mouse.nn@meta.data %>% count(annotated_clusters, group, name = "Count")
+df <- knitr::kable(df, format = "simple")
+
+# write to log
+msg <- c("", "Filtering cells", "", "\t\tCELL NUMBER DISTRIBUTION", df)
+cat(msg, file = log_path, append = TRUE, sep = "\n")
+
+# reset params
+mouse.nn$annotated_clusters <- as.character(mouse.nn$annotated_clusters)
+mouse.nn$group <- as.character(mouse.nn$group)
+Idents(mouse.nn) <- "annotated_clusters"
+
+# color map
+cm <- data.frame(cell_types = levels(mouse.downsample$annotated_clusters),
+                 colors = cluster_colors)
+cm <- cm[cm$cell_types %in% c(myReceiver,mySenders),]
 ```
 
-## Sender-agnostic potential ligands
-First, we will do the sender-agnostic approach. If a receptor is expressed in a reciever cell population, all associated ligands will be used. This approach utilizes a ligand-receptor (LR) database.
-```{r sender_agnostic_approach}
-# determine all genes expressed in target cell population
-cell_types <- levels(mouse.downsample$annotated_clusters)
-all_genes_receiver <- get_expressed_genes(myReceiver, mouse.downsample)
-print(paste("Reciever cell population =", myReceiver))
-print(paste(length(all_genes_receiver), "genes expressed in the reciever cell population."))
+## Gene set of interest
+The gene set of interest is usually DEGs but since we low/none for LECs we will use genes with a avg_log2FC > +2.
+```{r nn_goi}
+# define gene set of interest 
+# rows = target genes in the ligand target matrix
+path <- paste0(out, "DEGs/DEG_tables/", groups[1], "_vs_", groups[2], "_DEGs.tsv")
+goi <- read.table(file = path, sep = "\t", header = TRUE)
+goi <- goi[goi$cluster == myReceiver,]
+goi <- goi[goi$avg_log2FC > 2,]
+goi <- goi$gene
+goi <- goi %>% .[. %in% rownames(nn_ligand_target_matrix)]
 
-# define expressed receptors in the target cell population
-all_receptors <- unique(lr_network$to)
-print(paste(length(all_receptors), "receptors in the ligand-receptor database."))
-all_receptors_receiver <- intersect(all_receptors, all_genes_receiver)
-print(paste(length(all_receptors_receiver), "receptors expressed in reciever cell population."))
+# print message
+msg <- paste("There are", length(goi), "genes with a avg_log2FC > +2")
+print(msg)
+cat(c("", "Getting gene set of interest", paste0("\t", msg)), 
+    file = log_path, append = TRUE, sep = "\n")
+```
 
-# define potential ligands with expressed receptors
-potential_ligands_sender_agnostic <- lr_network %>% 
+## Sender-agnostic ligands
+Given receptors expressed in reciever cell population, get all associated ligands.
+```{r nn_sender_agnostic_potential_ligands}
+# print receiver cell pop
+paste("Reciever cell population =", myReceiver)
+
+# determine all genes expressed in receiver cell population
+all_genes_receiver <- get_expressed_genes(myReceiver, mouse.nn)
+msg <- paste(length(all_genes_receiver), "genes expressed in the reciever cell population.")
+print(msg)
+cat(c("", "Sender-agnostic info", paste0("\t", msg)), 
+    file = log_path, append = TRUE, sep = "\n")
+
+# define expressed receptors in the receiver cell population
+all_receptors_receiver <- intersect(unique(nn_lr_network$to), all_genes_receiver)
+msg <- paste(length(all_receptors_receiver), "receptors expressed in reciever cell population.")
+print(msg)
+cat(paste0("\t", msg), file = log_path, append = TRUE, sep = "\n")
+
+# define potential ligands given expressed receptors
+potential_ligands_sender_agnostic <- nn_lr_network %>% 
   filter(to %in% all_receptors_receiver) %>% 
   pull(from) %>% 
   unique()
-print(paste("There are", length(potential_ligands_sender_agnostic), "potential ligands."))
+msg <- paste("There are", length(potential_ligands_sender_agnostic), 
+            "potential ligands in the sender-agnostic approach.")
+print(msg)
+cat(paste0("\t", msg), file = log_path, append = TRUE, sep = "\n")
 ```
 
-## Sender-focused approach
-Second, we will do the sender-focused approach. Ligands expressed in senders whose matching receptors are expressed in the reciever.
-```{r sender_focused_approach}
+## Sender-focused ligands
+```{r nn_sender_focused_potential_ligands}
 # get all sender cell populations
-sender_celltypes <- cell_types[!cell_types %in% myReceiver]
+print("My sender cell types:")
+print(mySenders)
 
 # get all the expressed genes of every sender cell type separately
 list_all_genes_sender <- 
-  sender_celltypes %>% 
+  mySenders %>% 
   unique() %>% 
-  lapply(get_expressed_genes, mouse.downsample)
+  lapply(get_expressed_genes, mouse.nn)
 all_ligands_sender <- 
   list_all_genes_sender %>% 
   unlist() %>% 
   unique()
-print(paste(length(all_ligands_sender), "expressed ligands from sender cell types."))
 
-# get intersection to find ligands to focus on
-potential_ligands_focused <- intersect(potential_ligands_sender_agnostic, 
-                                       all_expressed_ligands_sender)
+# display message
+msg <- paste(length(all_ligands_sender), "expressed ligands from sender cell types.")
+print(msg)
+cat(c("", "Sender-focused info", paste0("\t", msg)),
+    file = log_path, append = TRUE, sep = "\n")
+
+# get ligands expressed in sender cell types
+potential_ligands_sender_focused <- 
+  intersect(potential_ligands_sender_agnostic, all_ligands_sender)
 
 # view how many
-length(potential_ligands_focused)
+msg <- paste(length(potential_ligands_sender_focused),
+             "sender-focused ligands intersect sender-agnostic ligands.")
+print(msg)
+cat(paste0("\t", msg), file = log_path, append = TRUE, sep = "\n")
 ```
 
-## Define gene set of interest
-```{r gene_set_of_interest}
-# user defined variables
-comparison <- "E3PM_vs_E3CM"
-adjpval_thresh <- 0.05
-lfc_thresh <- 0.25
+## Ligand activity
+Given a gene set of interest (usually DEGs), all expressed genes in the receiver cell population, the NicheNet ligand-target matrix, and potential ligands using the sender-agnostic approach, predict activities of ligands regulating expression in the gene set of interest. AUPR (Area Under the Precision-Recall curve) integrates precision and recall into a single value, emphasizing performance on the positive class, making it suitable for unbalanced data sets like ligand-target interactions. Precision measures the proportion of true-positives to (true-positives + false-positives). Recall measures the proportion of true-positives to (true-positives + false-negatives).
+```{r nn_sender_agnostic_ligand_activity}
+# define background genes
+background_genes <- all_genes_receiver %>% .[. %in% rownames(nn_ligand_target_matrix)]
+background_genes <- background_genes[!background_genes %in% goi]
+msg <- paste("\n", length(background_genes), "background genes. Background genes are",
+             "receiver expressed genes that are in the NicheNet ligand-target",
+             "matrix and NOT in the gene set of interest")
+print(msg)
+cat(paste0("", msg), file = log_path, append = TRUE, sep = "\n")
 
-# read in table
-prefix <- paste0(out, "DEGs/DEG_tables/")
-degs <- read.table(paste0(prefix, comparison, "_DEGs.tsv"),
-                   sep = "\t", 
-                   header = TRUE)
+# get ligand activity
+ligand_activities_sender_focused <- predict_ligand_activities(
+  geneset = goi,
+  background_expressed_genes = background_genes,
+  ligand_target_matrix = nn_ligand_target_matrix,
+  potential_ligands = potential_ligands_sender_focused)
 
-# subset genes of interest
-degs <- degs[degs$p_val_adj < adjpval_thresh,]
-degs <- degs[degs$avg_log2FC > lfc_thresh | degs$avg_log2FC < -lfc_thresh,]
-degs <- degs$gene
-
-# subset degs by genes in the ligand target matrix
-degs <- degs %>% .[. %in% rownames(ligand_target_matrix)]
-```
-
-## Define background genes
-```{r background_genes}
-background_expressed_genes <- all_expressed_genes_receiver %>% .[. %in% rownames(ligand_target_matrix)]
-
-length(background_expressed_genes)
-length(degs)
-```
-
-## NicheNet sender-agnostic ligand analysis
-### Predict ligands
-- main step of NicheNet \
-- potential ligands are ranked based on the presence of their target genes in the gene set (DEGs) of interest (compared to the background set of genes) \
-- Ligands are ranked based on the area under the precision-recall curve (AUPR) \
-```{r}
-ligand_activities <- predict_ligand_activities(geneset = degs,
-                                               background_expressed_genes = background_expressed_genes,
-                                               ligand_target_matrix = ligand_target_matrix,
-                                               potential_ligands = potential_ligands_sender_agnostic)
-
-ligand_activities <- 
-  ligand_activities %>% 
+# reorder table
+ligand_activities_sender_focused <- 
+  ligand_activities_sender_focused %>% 
   arrange(-aupr_corrected) %>% 
   mutate(rank = rank(desc(aupr_corrected)))
 
-head(ligand_activities)
-```
+# save output
+write.table(x = ligand_activities_sender_focused,
+            file = paste0(out, "nichenet/", groups[1], "_vs_", groups[2], "/",
+                          recieverOut, senderOut, "/sender_focused_ligand_activity.tsv"),
+            sep = "\t",
+            quote = FALSE,
+            row.names = FALSE)
 
-### Histogram
-- use the top 30 ligands to predict active target genes and construct an active ligand-receptor network
-- the choice of looking only at the 30 top-ranked ligands for further biological interpretation is based on biological intuition and is quite arbitrary. 
-- it is recommend to check the selected cutoff by looking at the distribution of the ligand activity values. 
-- Here, we show the ligand activity histogram (the score for the 30th ligand is indicated via the dashed line).
-```{r}
-p_hist_lig_activity <- 
-  ggplot(ligand_activities, aes(x=aupr_corrected)) + 
-  geom_histogram(color="black", fill="darkorange")  + 
-  geom_vline(aes(xintercept = min(ligand_activities %>% top_n(30, aupr_corrected) %>% pull(aupr_corrected))),
-             color="red", linetype="dashed", size=1) + 
-  labs(x="ligand activity (PCC)", y = "# ligands") +
-  theme_classic()
-p_hist_lig_activity
-```
-
-### AUPR
-Visualize the ligand activity measure (AUPR) of top-ranked ligands
-```{r}
-best_upstream_ligands <- 
-  ligand_activities %>% 
-  top_n(30, aupr_corrected) %>% 
+# save top 35 ligands
+best_sender_focused_ligands <- 
+  ligand_activities_sender_focused %>% 
   arrange(-aupr_corrected) %>% 
+  top_n(35, aupr_corrected) %>% 
   pull(test_ligand)
-
-vis_ligand_aupr <- 
-  ligand_activities %>% 
-  filter(test_ligand %in% best_upstream_ligands) %>%
-  column_to_rownames("test_ligand") %>% 
-  select(aupr_corrected) %>% arrange(aupr_corrected) %>% as.matrix(ncol = 1)
-
-make_heatmap_ggplot(vis_ligand_aupr,
-                    "Prioritized ligands", 
-                    "Ligand activity", 
-                     legend_title = "AUPR", 
-                    color = "darkorange") + 
-  theme(axis.text.x.top = element_blank())
 ```
 
-### Active target gene inference
-```{r}
-active_ligand_target_links_df <- best_upstream_ligands %>%
+## Ligand target links
+Infer active ligand target links between possible ligands and genes belonging to the DEGs.
+```{r nn_sender_foucsed_ligand_target_links}
+# infer ligand downstream gene targets
+ligand_target_links_df <- 
+  best_sender_focused_ligands %>%
   lapply(get_weighted_ligand_target_links,
-         geneset = degs,
-         ligand_target_matrix = ligand_target_matrix,
-         n = 100) %>%
+         geneset = goi,
+         ligand_target_matrix = nn_ligand_target_matrix) %>%
   bind_rows() %>% drop_na()
 
-active_ligand_target_links <- prepare_ligand_target_visualization(
-  ligand_target_df = active_ligand_target_links_df,
-  ligand_target_matrix = ligand_target_matrix,
-  cutoff = 0.33)
+# prepare for data for visualization
+ligand_target_links <- prepare_ligand_target_visualization(
+  ligand_target_df = ligand_target_links_df,
+  ligand_target_matrix = nn_ligand_target_matrix)
+order_ligands <- 
+  intersect(best_sender_focused_ligands, colnames(ligand_target_links)) %>% 
+  rev()
+order_targets <- ligand_target_links_df$target %>% 
+  unique() %>% 
+  intersect(rownames(ligand_target_links))
+vis_ligand_target <- t(ligand_target_links[order_targets, order_ligands])
 
-order_ligands <- intersect(best_upstream_ligands, colnames(active_ligand_target_links)) %>% rev()
-order_targets <- active_ligand_target_links_df$target %>% unique() %>% intersect(rownames(active_ligand_target_links))
+# save
+path <- paste0(out, "nichenet/", groups[1], "_vs_", groups[2], "/", recieverOut, 
+               senderOut, "/sender_focused_ligand_target_links_heatmap.pdf")
+pdf(path, height = 6, width = 14)
 
-vis_ligand_target <- t(active_ligand_target_links[order_targets,order_ligands])
+# plot
+make_heatmap_ggplot(matrix = vis_ligand_target, 
+                    y_name = "Prioritized Ligands", 
+                    x_name = "Predicted Target Genes",
+                    color = "purple", 
+                    legend_title = "Weight") +
+  scale_fill_gradient2(low = "whitesmoke",  high = "purple")  +
+  theme(legend.text = element_text(angle = 45, hjust = 1))
 
-make_heatmap_ggplot(vis_ligand_target, "Prioritized ligands", "Predicted target genes",
-                    color = "purple", legend_title = "Regulatory potential") +
-  scale_fill_gradient2(low = "whitesmoke",  high = "purple")
+
+remove(vis_ligand_target, ligand_target_links)
 ```
 
-### Receptors of top ranked ligands
-```{r}
-ligand_receptor_links_df <- get_weighted_ligand_receptor_links(
-  best_upstream_ligands, all_expressed_receptors_receiver,
-  lr_network, weighted_networks$lr_sig) 
+## Circos plot
+```{r nn_sender_focused_ligand_target_circos_plot, warning=FALSE}
+# Subset seurat obj
+mouse.nn.sender <- subset(mouse.nn, annotated_clusters == mySenders)
+table(mouse.nn.sender$annotated_clusters)
+DefaultAssay(mouse.nn.sender) <- "RNA"
+Idents(mouse.nn.sender) <- "annotated_clusters"
 
-vis_ligand_receptor_network <- prepare_ligand_receptor_visualization(
-  ligand_receptor_links_df,
-  best_upstream_ligands,
-  order_hclust = "both") 
+# Assign ligands to cell types
+ligand_type_indication_df <- assign_ligands_to_celltype(
+  seuratObj = mouse.nn.sender,
+  ligands = best_sender_focused_ligands,
+  celltype_col = "annotated_clusters"
+)
 
-(make_heatmap_ggplot(t(vis_ligand_receptor_network), 
-                     y_name = "Ligands", x_name = "Receptors",  
-                     color = "mediumvioletred", legend_title = "Prior interaction potential"))
+# Generate circos_links using get_ligand_target_links_oi
+circos_links <- get_ligand_target_links_oi(
+  ligand_type_indication_df = ligand_type_indication_df,
+  active_ligand_target_links_df = ligand_target_links_df %>% 
+    mutate(target_type = myReceiver),
+  cutoff = 0.40  # Set the weight cutoff
+)
+
+# Get ligand colors
+ligand_colors <- ""
+if("General" %in% circos_links$ligand_type) {
+  subset_cm <- cm[cm$cell_types %in% mySenders,]
+  subset_cm <- rbind(subset_cm, c("General","black"))
+  ligand_colors <- subset_cm$colors
+  names(ligand_colors) <- subset_cm$cell_types
+} else {
+  subset_cm <- cm[cm$cell_types %in% mySenders,]
+  ligand_colors <- subset_cm$colors
+  names(ligand_colors) <- subset_cm$cell_types
+}
+
+# Get target colors
+subset_cm <- cm[cm$cell_types %in% myReceiver,]
+target_colors <- subset_cm$colors
+names(target_colors) <- subset_cm$cell_types
+
+# Prepare the visualization object using prepare_circos_visualization
+vis_circos_obj <- prepare_circos_visualization(
+  circos_links = circos_links,
+  ligand_colors = ligand_colors,
+  target_colors = target_colors,
+  widths = NULL,
+  celltype_order = NULL
+)
+
+# Create legend
+circos_legend <- ComplexHeatmap::Legend(
+  labels = cm$cell_types,
+  background = cm$colors,
+  type = "point",
+  grid_height = unit(3, "mm"),
+  grid_width = unit(3, "mm"),
+  labels_gp = grid::gpar(fontsize = 8)
+  )
+circos_legend_grob <- grid::grid.grabExpr(ComplexHeatmap::draw(circos_legend))
+
+# Create circos plot
+make_circos_plot(vis_circos_obj,
+                 transparency = TRUE, 
+                 args.circos.text = list(cex = 0.5))
+circos_no_legend <- recordPlot()
+
+# Save
+path <- paste0(out, "nichenet/", groups[1], "_vs_", groups[2], "/", recieverOut, 
+               senderOut, "/sender_focused_ligand_target_circos_plot.pdf")
+pdf(path, height = 10, width = 11)
+
+# Plot with legend
+cowplot::plot_grid(circos_no_legend, circos_legend_grob, rel_widths = c(1, 0.1))
+dev.off()
+
+# Save
+path <- paste0(out, "nichenet/", groups[1], "_vs_", groups[2], "/", recieverOut, 
+               senderOut, "/sender_focused_ligand_target_circos_plot.svg")
+svg(path, height = 10, width = 11)
+
+# Plot with legend
+cowplot::plot_grid(circos_no_legend, circos_legend_grob, rel_widths = c(1, 0.1))
+dev.off()
+```
+
+## Circos plot 2
+```{r, eval=FALSE}
+target_gene_groups <- circos_links %>% 
+  select(target_type,target) %>%
+  filter(target_type == "LECs") %>%
+  distinct()
+
+vis_circos_obj2 <- prepare_circos_visualization(circos_links %>% select(-target_type) %>%
+                                                  # Combine target gene group information to circos_links
+                                                  inner_join(target_gene_groups, by="target"),
+                             ligand_colors = ligand_colors,
+                             target_colors = target_colors,
+                             widths = list(width_same_cell_same_ligand_type = 0.6,
+                                           width_different_cell = 4.5,
+                                           width_ligand_target = 12,
+                                           width_same_cell_same_target_type = 0.6))
+
+# Save
+path <- paste0(out, "nichenet/", groups[1], "_vs_", groups[2], "/", recieverOut, 
+               senderOut, "/sender_focused_ligand_target_circos_plot.pdf")
+pdf(path, height = 8, width = 8)
+
+circos.par(gap.degree = vis_circos_obj2$gaps)
+chordDiagram(vis_circos_obj2$links_circle,
+             directional = 1,
+             transparency=0,
+             order=vis_circos_obj2$order,
+             link.sort = TRUE,
+             link.decreasing = FALSE,
+             grid.col = vis_circos_obj2$ligand_colors,
+             diffHeight = 0.005,
+             direction.type = c("diffHeight", "arrows"),
+             link.arr.type = "big.arrow",
+             link.visible = vis_circos_obj2$links_circle$weight >=
+               attr(vis_circos_obj2$links_circle, "cutoff_include_all_ligands"),
+             annotationTrack = "grid",
+    # Add extra track for outer layer
+    preAllocateTracks = list(list(track.height = 0.025),
+                             list(track.height = 0.2)))
+
+# we go back to the first track and customize sector labels
+circos.track(track.index = 2, panel.fun = function(x, y) {
+    circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index,
+        facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.55), cex = 0.8)
+}, bg.border = NA) #
+
+# Add outer layer
+for (target_gene_group in unique(target_gene_groups$target_type)){
+  highlight.sector(target_gene_groups %>% filter(target_type == target_gene_group) %>% pull(target),
+                   track.index = 1,
+                 col = ligand_colors[target_gene_group],
+                 text = target_gene_group,
+                 cex = 0.8, facing="bending.inside", niceFacing = TRUE, text.vjust = "5mm")
+}
+
+# Save
+dev.off()
+```
+
+## Dot plot
+```{r nn_sender_focused_dot_plot}
+# save
+path <- paste0(out, "nichenet/", groups[1], "_vs_", groups[2], "/", recieverOut, 
+               senderOut, "/sender_focused_dot_plot.pdf")
+pdf(path, height = 8, width = 10)
+
+# dot plot
+DotPlot(subset(mouse.downsample, annotated_clusters %in% mySenders),
+        features = rev(best_sender_focused_ligands), 
+        cols = "RdYlBu") + 
+  labs(x = "Top Ranked Ligands", y = "Sender Cell Populations") +
+  coord_flip() +
+  scale_y_discrete(position = "right") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 0))
 ```
 
